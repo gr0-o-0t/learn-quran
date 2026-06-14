@@ -1,0 +1,58 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom
+.buildlog
+.history
+.svn
+
+# IntelliJ Related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Visual Studio Code Related
+.vscode/
+
+# Flutter/Dart Related
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# Generated Drift/Riverpod files
+*.g.dart
+
+# Symbol files
+app.*
+
+# Android Related
+**/android/app/key.properties
+**/android/app/local.properties
+**/android/app/**/generated/
+**/android/app/build.gradle
+**/android/local.properties
+**/android/flutter_sdk/
+
+# iOS/Mac Related
+**/ios/Flutter/.flutter-plugins
+**/ios/Flutter/.flutter-plugins-dependencies
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Runner/GeneratedPluginRegistrant.h
+**/ios/Runner/GeneratedPluginRegistrant.m
+**/ios/Runner/Info.plist
+**/ios/Runner/Assets.xcassets/AppIcon.appiconset/
+**/ios/Flash/
+
+# Local databases and models (if large)
+assets/databases/*.db
+assets/models/*.onnx
+assets/models/*.bin
