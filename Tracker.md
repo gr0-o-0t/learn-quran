@@ -63,4 +63,8 @@ This file is updated dynamically to reflect the completion status of all tasks.
 ### Phase 8: System Verification & Polish
 *   [x] **Task 8.1:** Run safety and accuracy sweeps. (Completed: 2026-07-04)
 *   [ ] **Task 8.2:** Run performance profiling on low-end test devices.
+    BLOCKED (2026-07-04): needs a real GGUF LLM + ONNX embedding model in
+    `assets/models/` (currently only `.gitkeep`) and a physical/emulated
+    low-end Android device — neither is available in this dev environment.
+    Revisit once real model assets are added.
 *   [ ] **Task 8.3:** Create release builds.
