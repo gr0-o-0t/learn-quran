@@ -90,3 +90,7 @@ This file is updated dynamically to reflect the completion status of all tasks.
     `android/key.properties` and the keystore for real production signing
     credentials before an actual Play Store release. No iOS target was
     scaffolded (no Mac/Xcode available in this environment).
+
+### Phase 9: Permissions Onboarding
+*   [x] **Task 9.1:** Build one-time permissions onboarding flow (notifications + exact-alarm scheduling) and a Settings fallback status card. (Completed: 2026-07-04)
+    See design: [docs/superpowers/specs/2026-07-04-permissions-onboarding-design.md](docs/superpowers/specs/2026-07-04-permissions-onboarding-design.md)
