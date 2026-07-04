@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -93,7 +94,8 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('NotificationService.requestNotificationsPermission failed: $e');
       return null;
     }
   }
@@ -107,7 +109,8 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.requestExactAlarmsPermission();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('NotificationService.requestExactAlarmsPermission failed: $e');
       return null;
     }
   }
@@ -120,7 +123,8 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.areNotificationsEnabled();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('NotificationService.areNotificationsEnabled failed: $e');
       return null;
     }
   }
@@ -133,7 +137,8 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.canScheduleExactNotifications();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('NotificationService.canScheduleExactNotifications failed: $e');
       return null;
     }
   }

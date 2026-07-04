@@ -70,13 +70,22 @@ class _AppEntryGateState extends ConsumerState<_AppEntryGate> {
 
   Future<void> _checkOnboardingStatus() async {
     final userRepo = ref.read(userRepositoryProvider);
-    final completed = await userRepo
-        .getEngagementValue('permissions_onboarding_completed');
-    if (mounted) {
-      setState(() {
-        _onboardingCompleted = completed == 'true';
-        _loading = false;
-      });
+    try {
+      final completed = await userRepo
+          .getEngagementValue('permissions_onboarding_completed');
+      if (mounted) {
+        setState(() {
+          _onboardingCompleted = completed == 'true';
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _onboardingCompleted = true; // fail open — never brick startup
+          _loading = false;
+        });
+      }
     }
   }
 
