@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/background_worker_service.dart';
+import 'core/providers/repository_providers.dart';
 import 'presentation/screens/dashboard_screen.dart';
 import 'presentation/screens/quran_reader_screen.dart';
 import 'presentation/screens/qa_agent_screen.dart';
 import 'presentation/screens/settings_screen.dart';
+import 'presentation/screens/permissions_onboarding_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,8 +42,59 @@ class LearnQuranApp extends StatelessWidget {
     return MaterialApp(
       title: 'Learn Quran',
       theme: AppTheme.lightTheme,
-      home: const AppShell(),
+      home: const _AppEntryGate(),
       debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+/// Decides whether to show the one-time permissions onboarding flow or go
+/// straight to [AppShell], based on the persisted
+/// `permissions_onboarding_completed` flag.
+class _AppEntryGate extends ConsumerStatefulWidget {
+  const _AppEntryGate();
+
+  @override
+  ConsumerState<_AppEntryGate> createState() => _AppEntryGateState();
+}
+
+class _AppEntryGateState extends ConsumerState<_AppEntryGate> {
+  bool _loading = true;
+  bool _onboardingCompleted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboardingStatus();
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final userRepo = ref.read(userRepositoryProvider);
+    final completed = await userRepo
+        .getEngagementValue('permissions_onboarding_completed');
+    if (mounted) {
+      setState(() {
+        _onboardingCompleted = completed == 'true';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.softIvory,
+        body: Center(
+          child: CircularProgressIndicator(color: AppTheme.emeraldGreen),
+        ),
+      );
+    }
+    if (_onboardingCompleted) {
+      return const AppShell();
+    }
+    return PermissionsOnboardingScreen(
+      onFinished: () => setState(() => _onboardingCompleted = true),
     );
   }
 }
