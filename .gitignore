@@ -34,6 +34,7 @@
 app.*
 
 # Android Related
+/android/build/
 **/android/app/key.properties
 **/android/app/local.properties
 **/android/app/**/generated/
