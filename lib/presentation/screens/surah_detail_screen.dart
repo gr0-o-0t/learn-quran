@@ -74,7 +74,7 @@ class _SurahDetailScreenState extends ConsumerState<SurahDetailScreen> {
                               child: Container(
                                 width: 40,
                                 height: 4,
-                                margin: const EdgeInsets.bottom(16),
+                                margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
                                   color: AppTheme.textMuted.withOpacity(0.3),
                                   borderRadius: BorderRadius.circular(2),
