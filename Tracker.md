@@ -56,8 +56,8 @@ This file is updated dynamically to reflect the completion status of all tasks.
 *   [x] **Task 6.4:** Build Settings Screen.
 
 ### Phase 7: Story Compiler & Engagement Engine
-*   [ ] **Task 7.1:** Implement `user_engagement_state` tracking.
-*   [ ] **Task 7.2:** Implement daily story compiler prompts.
+*   [x] **Task 7.1:** Implement `user_engagement_state` tracking. (Completed: 2026-07-04)
+*   [x] **Task 7.2:** Implement daily story compiler prompts. Wired into Dashboard Screen. (Completed: 2026-07-04)
 *   [ ] **Task 7.3:** Write story-caching integration tests.
 
 ### Phase 8: System Verification & Polish

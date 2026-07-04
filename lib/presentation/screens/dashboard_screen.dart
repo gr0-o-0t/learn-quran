@@ -34,6 +34,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Verse? _reflectionVerse;
   bool _loadingReflection = true;
 
+  // Daily story state (LLM-compiled, personalized to engagement history)
+  String? _dailyStory;
+  bool _loadingStory = true;
+
   // Calculation parameters from settings
   CalculationMethod _method = CalculationMethod.muslim_world_league;
   Madhab _madhab = Madhab.hanafi;
@@ -65,6 +69,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _loadSalatLog(),
       _loadReflectionVerse(),
     ]);
+    // Don't block the rest of the dashboard on LLM generation.
+    unawaited(_loadDailyStory());
   }
 
   Future<void> _loadSettings() async {
@@ -172,6 +178,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
+  Future<void> _loadDailyStory() async {
+    try {
+      final story = await ref.read(dailyStoryServiceProvider).getOrCompileDailyStory();
+      if (mounted) {
+        setState(() {
+          _dailyStory = story;
+          _loadingStory = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loadingStory = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -215,6 +237,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
             // Daily reflection card
             _buildDailyReflectionCard(theme),
+            const SizedBox(height: 16),
+
+            // Daily story card (personalized, LLM-compiled)
+            _buildDailyStoryCard(theme),
           ],
         ),
       ),
@@ -483,6 +509,58 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   style: TextStyle(color: AppTheme.emeraldGreen)),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDailyStoryCard(ThemeData theme) {
+    if (_loadingStory) {
+      return Container(
+        height: 150,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceMint,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const CircularProgressIndicator(color: AppTheme.emeraldGreen),
+      );
+    }
+
+    final story = _dailyStory;
+    if (story == null || story.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    String title = 'Your Daily Story';
+    String body = story;
+    final titleMatch = RegExp(r'^Title:\s*(.+)$', multiLine: true).firstMatch(story);
+    if (titleMatch != null) {
+      title = titleMatch.group(1)!.trim();
+      body = story.replaceFirst(titleMatch.group(0)!, '').trim();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceMint,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.favorite_rounded,
+                  color: AppTheme.emeraldGreen, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title, style: theme.textTheme.titleMedium),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(body, style: theme.textTheme.bodyMedium),
         ],
       ),
     );
