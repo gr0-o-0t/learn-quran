@@ -82,4 +82,30 @@ void main() {
       expect(fakePlugin.cancelledIds, contains(123));
     });
   });
+
+  group('Permission methods on non-Android (real plugin)', () {
+    test('requestNotificationsPermission returns null off Android', () async {
+      final realService = NotificationService();
+      final result = await realService.requestNotificationsPermission();
+      expect(result, isNull);
+    });
+
+    test('requestExactAlarmsPermission returns null off Android', () async {
+      final realService = NotificationService();
+      final result = await realService.requestExactAlarmsPermission();
+      expect(result, isNull);
+    });
+
+    test('areNotificationsEnabled returns null off Android', () async {
+      final realService = NotificationService();
+      final result = await realService.areNotificationsEnabled();
+      expect(result, isNull);
+    });
+
+    test('canScheduleExactNotifications returns null off Android', () async {
+      final realService = NotificationService();
+      final result = await realService.canScheduleExactNotifications();
+      expect(result, isNull);
+    });
+  });
 }

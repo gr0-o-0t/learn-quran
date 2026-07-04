@@ -83,6 +83,60 @@ class NotificationService {
   Future<void> cancelNotification(int id) async {
     await _plugin.cancel(id: id);
   }
+
+  /// Requests the POST_NOTIFICATIONS runtime permission (Android 13+).
+  /// Returns null on platforms where the Android-specific implementation
+  /// isn't available.
+  Future<bool?> requestNotificationsPermission() async {
+    try {
+      return _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Requests exact-alarm scheduling access (Android 12+). This opens the
+  /// system settings screen rather than an in-app dialog. Returns null on
+  /// platforms where the Android-specific implementation isn't available.
+  Future<bool?> requestExactAlarmsPermission() async {
+    try {
+      return _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestExactAlarmsPermission();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Whether notifications are currently enabled for this app. Returns null
+  /// on platforms where the Android-specific implementation isn't available.
+  Future<bool?> areNotificationsEnabled() async {
+    try {
+      return _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.areNotificationsEnabled();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Whether this app can currently schedule exact alarms. Returns null on
+  /// platforms where the Android-specific implementation isn't available.
+  Future<bool?> canScheduleExactNotifications() async {
+    try {
+      return _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.canScheduleExactNotifications();
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 /// Riverpod provider for NotificationService.
