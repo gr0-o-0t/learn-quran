@@ -27,33 +27,33 @@ This file is updated dynamically to reflect the completion status of all tasks.
 
 ### Phase 2: Drift Local Persistence & Database Seed
 *   [x] **Task 2.1:** Implement Drift table schemas. (Completed: 2026-06-14)
-*   [ ] **Task 2.2:** Run code generator for DB classes.
-*   [ ] **Task 2.3:** Prepare pre-seeded SQLite databases and register them as app assets.
-*   [ ] **Task 2.4:** Write integration tests for reading and logging.
+*   [x] **Task 2.2:** Run code generator for DB classes. (Completed: 2026-06-14)
+*   [x] **Task 2.3:** Prepare pre-seeded SQLite databases and register them as app assets. (Completed: 2026-06-14)
+*   [x] **Task 2.4:** Write integration tests for reading and logging. (Completed: 2026-06-14)
 
 ### Phase 3: Salat Alarms & Location Computing
-*   [ ] **Task 3.1:** Implement Adhan calculation repository.
-*   [ ] **Task 3.2:** Implement offline local notification scheduler.
-*   [ ] **Task 3.3:** Setup daily Salat recalculation worker using Workmanager.
-*   [ ] **Task 3.4:** Write prayer calculation tests.
+*   [x] **Task 3.1:** Implement Adhan calculation repository. (Completed: 2026-06-14)
+*   [x] **Task 3.2:** Implement offline local notification scheduler. (Completed: 2026-06-14)
+*   [x] **Task 3.3:** Setup daily Salat recalculation worker using Workmanager. (Completed: 2026-06-14)
+*   [x] **Task 3.4:** Write prayer calculation tests. (Completed: 2026-06-14)
 
 ### Phase 4: Local Embedding & sqlite-vec Integration
-*   [ ] **Task 4.1:** Setup `sqlite-vec` FFI compilation in Flutter.
-*   [ ] **Task 4.2:** Integrate local query embedding model via ONNX.
-*   [ ] **Task 4.3:** Setup local RAG Repository for vector queries.
-*   [ ] **Task 4.4:** Write vector search tests.
+*   [x] **Task 4.1:** Setup `sqlite-vec` FFI compilation in Flutter. (Completed: 2026-06-22)
+*   [x] **Task 4.2:** Integrate local query embedding model via ONNX. (Completed: 2026-06-22)
+*   [x] **Task 4.3:** Setup local RAG Repository for vector queries. (Completed: 2026-06-22)
+*   [x] **Task 4.4:** Write vector search tests. (Completed: 2026-06-22)
 
 ### Phase 5: On-Device LLM (Gemma 4) Inference Engine
-*   [ ] **Task 5.1:** Bind `llama.cpp` shared libraries via Dart FFI.
-*   [ ] **Task 5.2:** Implement low-end (e2b) vs high-end (e4b) model loader.
-*   [ ] **Task 5.3:** Create prompt formatting engines (Sunnah Q&A behavior).
-*   [ ] **Task 5.4:** Write model inference test hooks.
+*   [x] **Task 5.1:** Bind `llama.cpp` shared libraries via Dart FFI. (Completed: 2026-06-22)
+*   [x] **Task 5.2:** Implement low-end (e2b) vs high-end (e4b) model loader. (Completed: 2026-06-22)
+*   [x] **Task 5.3:** Create prompt formatting engines (Sunnah Q&A behavior). (Completed: 2026-06-22)
+*   [x] **Task 5.4:** Write model inference test hooks. (Completed: 2026-06-22)
 
 ### Phase 6: Core UI Screens
-*   [ ] **Task 6.1:** Build Dashboard Screen.
-*   [ ] **Task 6.2:** Build Quran Reader.
-*   [ ] **Task 6.3:** Build Q&A Agent Chat UI.
-*   [ ] **Task 6.4:** Build Settings Screen.
+*   [x] **Task 6.1:** Build Dashboard Screen.
+*   [x] **Task 6.2:** Build Quran Reader.
+*   [x] **Task 6.3:** Build Q&A Agent Chat UI.
+*   [x] **Task 6.4:** Build Settings Screen.
 
 ### Phase 7: Story Compiler & Engagement Engine
 *   [ ] **Task 7.1:** Implement `user_engagement_state` tracking.

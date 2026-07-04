@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqlite3/sqlite3.dart';
+import 'package:sqlite_vector/sqlite_vector.dart';
 
 part 'app_database.g.dart';
 
@@ -114,14 +117,87 @@ class UserEngagementState extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Named constructor for tests — accepts any [QueryExecutor],
+  /// typically `NativeDatabase.memory()`.
+  AppDatabase.forTesting(QueryExecutor executor) : super(executor);
+
   @override
   int get schemaVersion => 1;
+
+  bool _hasVectorExtension = false;
+  bool get hasVectorExtension => _hasVectorExtension;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) async {
+          await m.createAll();
+          await _createVirtualTable();
+        },
+        beforeOpen: (details) async {
+          await _createVirtualTable();
+        },
+      );
+
+  Future<void> _createVirtualTable() async {
+    try {
+      // Ensure the sqlite-vec extension is loaded
+      sqlite3.loadSqliteVectorExtension();
+    } catch (e) {
+      // Ignore load error
+    }
+
+    try {
+      // Check if vec0 module is registered in SQLite
+      final moduleCheck = await customSelect("SELECT 1 FROM pragma_module_list WHERE name = 'vec0'").getSingleOrNull();
+      _hasVectorExtension = moduleCheck != null;
+    } catch (e) {
+      _hasVectorExtension = false;
+    }
+
+    if (_hasVectorExtension) {
+      try {
+        await customStatement('''
+          CREATE VIRTUAL TABLE IF NOT EXISTS vec_knowledge_base USING vec0(
+            embedding float[384]
+          );
+        ''');
+      } catch (e) {
+        _hasVectorExtension = false;
+        await _createFallbackTable();
+      }
+    } else {
+      await _createFallbackTable();
+    }
+  }
+
+  Future<void> _createFallbackTable() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS vec_knowledge_base (
+        rowid INTEGER PRIMARY KEY,
+        embedding BLOB
+      );
+    ''');
+  }
 }
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'db.sqlite'));
+
+    if (!await file.exists()) {
+      try {
+        // Create directory if not exists
+        await Directory(dbFolder.path).create(recursive: true);
+        // Load database from assets and copy to local sandbox
+        final data = await rootBundle.load('assets/databases/quran_base.db');
+        final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        await file.writeAsBytes(bytes);
+      } catch (e) {
+        // Fallback: file will be created as a new empty database by NativeDatabase
+      }
+    }
+
     return NativeDatabase.createInBackground(file);
   });
 }

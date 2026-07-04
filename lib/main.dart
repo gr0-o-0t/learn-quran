@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
+import 'presentation/screens/dashboard_screen.dart';
+import 'presentation/screens/quran_reader_screen.dart';
+import 'presentation/screens/qa_agent_screen.dart';
+import 'presentation/screens/settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,49 +23,78 @@ class LearnQuranApp extends StatelessWidget {
     return MaterialApp(
       title: 'Learn Quran',
       theme: AppTheme.lightTheme,
-      home: const DashboardScreenPlaceholder(),
+      home: const AppShell(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class DashboardScreenPlaceholder extends StatelessWidget {
-  const DashboardScreenPlaceholder({super.key});
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  int _currentIndex = 0;
+
+  static const List<Widget> _screens = [
+    DashboardScreen(),
+    QuranReaderScreen(),
+    QaAgentScreen(),
+    SettingsScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Learn Quran'),
-        centerTitle: true,
+      appBar: (_currentIndex == 2 || _currentIndex == 3)
+          ? null
+          : AppBar(
+              title: Text(_titles[_currentIndex]),
+              centerTitle: true,
+            ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.menu_book_rounded,
-              size: 80,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Welcome to Learn Quran',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Offline Quran Study & Sunnah Q&A Companion',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: AppTheme.softIvory,
+        selectedItemColor: AppTheme.forestGreen,
+        unselectedItemColor: AppTheme.textMuted,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        elevation: 0,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu_book_rounded),
+            label: 'Quran',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat_rounded),
+            label: 'Q&A',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_rounded),
+            label: 'Settings',
+          ),
+        ],
       ),
     );
   }
+
+  static const List<String> _titles = [
+    'Learn Quran',
+    'The Holy Quran',
+    'Gentle Teacher',
+    'Settings',
+  ];
 }

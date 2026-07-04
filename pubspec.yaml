@@ -18,6 +18,7 @@ dependencies:
   # Databases & FFI
   drift: ^2.16.0
   sqlite3_flutter_libs: ^0.6.0+eol
+  sqlite3: ^3.0.0
   path_provider: ^2.1.2
   path: ^1.9.0
 
@@ -34,6 +35,10 @@ dependencies:
 
   # Cupertino Icons
   cupertino_icons: ^1.0.6
+  timezone: ^0.11.0
+  sqlite_vector: ^1.0.0
+  onnxruntime: ^1.4.1
+  ffi: ^2.2.0
 
 dev_dependencies:
   flutter_test:
