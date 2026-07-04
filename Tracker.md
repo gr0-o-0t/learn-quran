@@ -61,6 +61,6 @@ This file is updated dynamically to reflect the completion status of all tasks.
 *   [x] **Task 7.3:** Write story-caching integration tests. (Completed: 2026-07-04)
 
 ### Phase 8: System Verification & Polish
-*   [ ] **Task 8.1:** Run safety and accuracy sweeps.
+*   [x] **Task 8.1:** Run safety and accuracy sweeps. (Completed: 2026-07-04)
 *   [ ] **Task 8.2:** Run performance profiling on low-end test devices.
 *   [ ] **Task 8.3:** Create release builds.
