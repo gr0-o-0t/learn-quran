@@ -67,4 +67,15 @@ This file is updated dynamically to reflect the completion status of all tasks.
     `assets/models/` (currently only `.gitkeep`) and a physical/emulated
     low-end Android device — neither is available in this dev environment.
     Revisit once real model assets are added.
-*   [ ] **Task 8.3:** Create release builds.
+*   [x] **Task 8.3:** Create release builds. (Completed: 2026-07-04)
+    Scaffolded the missing `android/` platform project (`flutter create`
+    had never been run for a target), installed the Android SDK/NDK
+    toolchain, fixed two real build-blocking bugs (`EdgeInsets.bottom`
+    isn't a constructor; onnxruntime 1.4.1's stale compileSdk vs. newer
+    transitive androidx deps), and wired up release signing.
+    `flutter build apk --release` succeeds and produces a verified-signed
+    84.8MB APK. Signed with a throwaway dev keystore
+    (`android/app/upload-keystore.jks`, gitignored) — swap
+    `android/key.properties` and the keystore for real production signing
+    credentials before an actual Play Store release. No iOS target was
+    scaffolded (no Mac/Xcode available in this environment).
