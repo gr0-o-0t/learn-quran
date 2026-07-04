@@ -35,6 +35,10 @@ This file is updated dynamically to reflect the completion status of all tasks.
 *   [x] **Task 3.1:** Implement Adhan calculation repository. (Completed: 2026-06-14)
 *   [x] **Task 3.2:** Implement offline local notification scheduler. (Completed: 2026-06-14)
 *   [x] **Task 3.3:** Setup daily Salat recalculation worker using Workmanager. (Completed: 2026-06-14)
+    Swapped to `android_alarm_manager_plus` on 2026-07-04: `workmanager`
+    0.9.0+3 (latest) still applies its own Kotlin Gradle Plugin, which
+    Flutter is deprecating in favor of Built-in Kotlin, and there's no
+    newer release that fixes it.
 *   [x] **Task 3.4:** Write prayer calculation tests. (Completed: 2026-06-14)
 
 ### Phase 4: Local Embedding & sqlite-vec Integration
