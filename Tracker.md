@@ -39,6 +39,13 @@ This file is updated dynamically to reflect the completion status of all tasks.
     0.9.0+3 (latest) still applies its own Kotlin Gradle Plugin, which
     Flutter is deprecating in favor of Built-in Kotlin, and there's no
     newer release that fixes it.
+    Also on 2026-07-04: the service was implemented but never actually
+    invoked anywhere in the app, so this never ran. Bootstrapped it in
+    `main()` and added the RECEIVE_BOOT_COMPLETED / SCHEDULE_EXACT_ALARM /
+    POST_NOTIFICATIONS manifest permissions it needs. Still missing: a
+    runtime permission-request flow for exact alarms (Android 12+) and
+    notifications (Android 13+) — until a user grants those manually,
+    scheduling can silently no-op.
 *   [x] **Task 3.4:** Write prayer calculation tests. (Completed: 2026-06-14)
 
 ### Phase 4: Local Embedding & sqlite-vec Integration
