@@ -12,16 +12,65 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
   String _selectedLanguage = 'English';
   String _selectedModel = 'e2b';
   String _calculationMethod = 'muslim_world_league';
   bool _salatNotifications = true;
+  bool _notificationsEnabled = false;
+  bool _exactAlarmsEnabled = false;
+  bool _checkingPermissions = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future.microtask(() => _loadSettings());
+    _checkPermissions();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Catches the user coming back from the exact-alarm system settings
+    // screen, which flutter_local_notifications opens outside the app.
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissions();
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    final notifService = ref.read(notificationServiceProvider);
+    final notifsEnabled = await notifService.areNotificationsEnabled();
+    final exactAlarmsEnabled =
+        await notifService.canScheduleExactNotifications();
+    if (mounted) {
+      setState(() {
+        _notificationsEnabled = notifsEnabled ?? false;
+        _exactAlarmsEnabled = exactAlarmsEnabled ?? false;
+        _checkingPermissions = false;
+      });
+    }
+  }
+
+  Future<void> _grantNotifications() async {
+    await ref
+        .read(notificationServiceProvider)
+        .requestNotificationsPermission();
+    await _checkPermissions();
+  }
+
+  Future<void> _grantExactAlarms() async {
+    await ref
+        .read(notificationServiceProvider)
+        .requestExactAlarmsPermission();
+    await _checkPermissions();
   }
 
   Future<void> _loadSettings() async {
@@ -72,6 +121,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             Text('Settings', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 24),
+
+            if (!_checkingPermissions &&
+                (!_notificationsEnabled || !_exactAlarmsEnabled)) ...[
+              _buildSectionCard(
+                theme: theme,
+                title: 'Permissions',
+                icon: Icons.verified_user_rounded,
+                children: [
+                  if (!_notificationsEnabled)
+                    ListTile(
+                      title: Text('Prayer Notifications',
+                          style: theme.textTheme.bodyMedium),
+                      subtitle: Text('Needed to show Salat reminders.',
+                          style: theme.textTheme.labelLarge),
+                      trailing: TextButton(
+                        onPressed: _grantNotifications,
+                        child: const Text('Grant'),
+                      ),
+                    ),
+                  if (!_exactAlarmsEnabled)
+                    ListTile(
+                      title: Text('Precise Reminder Timing',
+                          style: theme.textTheme.bodyMedium),
+                      subtitle: Text(
+                          'Needed for reminders to arrive exactly on time.',
+                          style: theme.textTheme.labelLarge),
+                      trailing: TextButton(
+                        onPressed: _grantExactAlarms,
+                        child: const Text('Grant'),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Language & Translation
             _buildSectionCard(
