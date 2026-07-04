@@ -36,6 +36,8 @@ class _PermissionsOnboardingScreenState
     try {
       await notifService.requestNotificationsPermission();
       await notifService.requestExactAlarmsPermission();
+    } catch (_) {
+      // Never let a permission-call failure block onboarding.
     } finally {
       await _finish();
     }
