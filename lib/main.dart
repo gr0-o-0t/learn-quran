@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
+import 'core/services/background_worker_service.dart';
 import 'presentation/screens/dashboard_screen.dart';
 import 'presentation/screens/quran_reader_screen.dart';
 import 'presentation/screens/qa_agent_screen.dart';
@@ -8,11 +10,26 @@ import 'presentation/screens/settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Best-effort: never let background-alarm setup delay or block app startup.
+  unawaited(_scheduleBackgroundPrayerWorker());
   runApp(
     const ProviderScope(
       child: LearnQuranApp(),
     ),
   );
+}
+
+Future<void> _scheduleBackgroundPrayerWorker() async {
+  try {
+    final worker = BackgroundWorkerService();
+    await worker.initialize();
+    await worker.scheduleDailyPrayerWorker();
+    // Also run once immediately so notifications are populated right away,
+    // instead of waiting up to 24h for the first periodic fire.
+    await worker.triggerImmediateRecalculation();
+  } catch (_) {
+    // Ignore — e.g. platforms other than Android don't support this plugin.
+  }
 }
 
 class LearnQuranApp extends StatelessWidget {
