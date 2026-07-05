@@ -293,7 +293,9 @@ jobs:
             --plugin gtk \
             --output appimage
 
-          mv ./*.AppImage learn_quran-linux-x86_64.AppImage
+          # Excludes linuxdeploy-x86_64.AppImage itself, which also matches
+          # *.AppImage and would otherwise turn this into a two-source mv.
+          mv ./Learn_Quran*.AppImage learn_quran-linux-x86_64.AppImage
 
       - uses: actions/upload-artifact@v7
         with:
