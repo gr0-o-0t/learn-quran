@@ -215,13 +215,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
 
     if (isDownloading) {
+      // A bare bar makes real-but-slow multi-GB progress indistinguishable
+      // from a frozen one, especially once it's visually near-full — so
+      // show the percentage and byte count alongside it.
+      final downloadedBytes = (_downloadProgress * model.sizeBytes).round();
       return ListTile(
         title: titleText,
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: LinearProgressIndicator(
-            value: _downloadProgress,
-            color: AppTheme.emeraldGreen,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LinearProgressIndicator(
+                value: _downloadProgress,
+                color: AppTheme.emeraldGreen,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${(_downloadProgress * 100).toStringAsFixed(0)}% • '
+                  '${_formatSize(downloadedBytes)} / ${_formatSize(model.sizeBytes)}',
+                  style: theme.textTheme.labelLarge,
+                ),
+              ),
+            ],
           ),
         ),
         trailing: TextButton(
