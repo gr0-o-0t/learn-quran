@@ -5,39 +5,50 @@ This project uses **Drift** (SQLite) to manage structured application data. Sinc
 ---
 
 ## 1. Read-Only Knowledge Base Tables
-These tables are pre-populated and bundled inside the application assets to support offline reading and vector indexing.
+These tables live in a separate, always-read-only database file (`kb.db`),
+distinct from the user-data database below. The app never writes to them.
+`kb.db` ships bundled as an app asset by default and can be updated from
+Settings (see the knowledge-base-v1 design doc).
 
 ### 1.1. `verses`
-Stores the Quran text, structural markers, and default translations.
+Stores the Quran text, structural markers, and translations.
 *   `id`: `INTEGER` (Primary Key)
 *   `surah_number`: `INTEGER` (1-114)
 *   `ayah_number`: `INTEGER`
 *   `juz_number`: `INTEGER` (1-30)
 *   `arabic_text`: `TEXT` (Uthmani script)
-*   `english_text`: `TEXT` (Sahih International / Clear Quran)
-*   `bangla_text`: `TEXT`
-*   `hindi_text`: `TEXT`
+*   `english_text`: `TEXT` (Saheeh International)
+*   `bangla_text`: `TEXT` (Muhiuddin Khan)
 
 ### 1.2. `hadiths`
-Stores authentic Hadiths for referencing and RAG pipeline.
+Stores authentic Hadiths (Sahih al-Bukhari and Sahih Muslim only) for
+referencing and the RAG pipeline.
 *   `id`: `INTEGER` (Primary Key)
-*   `book_name`: `TEXT` (e.g., 'Sahih al-Bukhari', 'Sahih Muslim')
+*   `book_name`: `TEXT` ('Sahih al-Bukhari' or 'Sahih Muslim')
 *   `hadith_number`: `TEXT`
 *   `chapter_title`: `TEXT`
 *   `arabic_text`: `TEXT`
 *   `english_text`: `TEXT`
 *   `bangla_text`: `TEXT`
-*   `hindi_text`: `TEXT`
 
 ### 1.3. `tafsirs`
-Scholarly commentaries linked directly to verses.
+Tafsir Ibn Kathir commentary linked to verses.
 *   `id`: `INTEGER` (Primary Key)
 *   `surah_number`: `INTEGER` (Foreign Key -> `verses.surah_number`)
 *   `ayah_number`: `INTEGER` (Foreign Key -> `verses.ayah_number`)
-*   `author`: `TEXT` (e.g., 'Ibn Kathir')
+*   `author`: `TEXT` ('Ibn Kathir')
 *   `content_english`: `TEXT`
 *   `content_bangla`: `TEXT`
-*   `content_hindi`: `TEXT`
+
+### 1.4. `kb_meta`
+Single-row-per-key metadata describing this `kb.db` build.
+*   `key`: `TEXT` (Primary Key) — e.g. `'version'`, `'built_at'`, `'embedding_model'`
+*   `value`: `TEXT`
+
+Note: Hindi translations/commentary are intentionally not included — no
+authentic source was found for Hindi Hadith or Tafsir Ibn Kathir (see the
+knowledge-base-v1 design doc's Decision Log). AI-translation-on-demand is a
+deferred, separate feature.
 
 ---
 
@@ -90,10 +101,13 @@ A key-value table storing local state metrics used by the daily story compiler a
 
 ---
 
-## 3. SQLite-Vec (Virtual Tables for Vector Search)
-Used for fast cosine-similarity search on embeddings.
+## 3. Vector Search Table
+Lives in `kb.db` alongside the tables in section 1, precomputed at build
+time (never generated on-device). Built as a plain table, not a `vec0`
+virtual table — `sqlite-vec`'s native extension was found not to load in
+the current dev/CI environment, so `RagRepository`'s existing Dart-side
+dot-product fallback is the search path this table is built for.
 
 ### 3.1. `vec_knowledge_base`
-Virtual table using the `sqlite-vec` extension to query embeddings.
-*   `rowid`: `INTEGER` (Maps to row ID in `verses`, `hadiths`, or `tafsirs`)
-*   `embedding`: `F32_BLOB` (Float32 vector array representing the segment embedding)
+*   `rowid`: `INTEGER` (Primary Key — maps to row ID in `verses`, `hadiths`, or `tafsirs`, using the existing `hadithOffset`/`tafsirOffset` scheme in `RagRepository`)
+*   `embedding`: `BLOB` (384-dim float32 vector, English text only, from BGE-small-en-v1.5)
