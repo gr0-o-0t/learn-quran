@@ -1,9 +1,18 @@
 import 'dart:math';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:onnxruntime/onnxruntime.dart';
+import 'package:bert_tokenizer/bert_tokenizer.dart';
+
+/// BGE's documented asymmetric convention: passages/corpus text embeds
+/// plain, but queries get this instruction prefix — skipping it measurably
+/// hurts retrieval quality per the model's own card.
+const _queryPrefix = 'Represent this sentence for searching relevant passages: ';
+
+const _maxTokenLength = 256;
 
 class EmbeddingService {
   OrtSession? _session;
+  BertTokenizer? _tokenizer;
   bool _initialized = false;
   bool _useMock = false;
 
@@ -18,58 +27,66 @@ class EmbeddingService {
     }
 
     try {
-      // Initialize ONNX Runtime Env
-      OrtEnv.instance.init();
+      final vocabData = await rootBundle.loadString('assets/models/bge_small_en_v1_5_vocab.txt');
+      _tokenizer = BertTokenizer.fromStringContent(vocabData);
 
-      // Attempt to load model from assets
-      final bytes = await rootBundle.load('assets/models/embedding_model.onnx');
+      OrtEnv.instance.init();
+      final bytes = await rootBundle.load('assets/models/bge_small_en_v1_5.onnx');
       final sessionOptions = OrtSessionOptions();
       _session = OrtSession.fromBuffer(bytes.buffer.asUint8List(), sessionOptions);
       _initialized = true;
     } catch (e) {
-      // Fallback to mock if asset not found or init fails (e.g. in test environment)
+      // Fallback to mock if assets aren't present or init fails (e.g. tests).
       _useMock = true;
       _initialized = true;
     }
   }
 
-  Future<List<double>> getEmbedding(String text) async {
+  /// Returns a normalized 384-dim embedding for [text]. Set [isQuery] when
+  /// embedding a search query (not corpus/passage text) so BGE's asymmetric
+  /// instruction prefix is applied — see the constant above.
+  Future<List<double>> getEmbedding(String text, {bool isQuery = false}) async {
     await init();
 
+    final effectiveText = isQuery ? '$_queryPrefix$text' : text;
+
     if (_useMock) {
-      return _generateMockEmbedding(text);
+      return _generateMockEmbedding(effectiveText);
     }
 
     try {
-      final tokens = _tokenize(text);
-      final shape = [1, tokens.length];
+      final input = _tokenizer!.prepareNerInput(effectiveText, _maxTokenLength);
+      final shape = [1, input.inputIds.length];
 
-      final inputIdsTensor = OrtValueTensor.createTensorWithDataList(
-        tokens,
-        shape,
-      );
-      final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(
-        List<int>.filled(tokens.length, 1),
-        shape,
-      );
+      final inputIdsTensor = OrtValueTensor.createTensorWithDataList(input.inputIds, shape);
+      final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(input.inputMask, shape);
+      final tokenTypeIdsTensor = OrtValueTensor.createTensorWithDataList(input.segmentIds, shape);
 
       final inputs = {
         'input_ids': inputIdsTensor,
         'attention_mask': attentionMaskTensor,
+        'token_type_ids': tokenTypeIdsTensor,
       };
 
       final runOptions = OrtRunOptions();
       final outputs = await _session!.runAsync(runOptions, inputs);
 
-      final outputValue = outputs != null && outputs.isNotEmpty ? outputs[0]?.value : null;
+      // BGE uses CLS pooling per its model card: the sentence embedding is
+      // the first token's ('[CLS]') last-hidden-state vector, not a mean
+      // over all tokens.
+      final lastHiddenState = outputs != null && outputs.isNotEmpty ? outputs[0]?.value : null;
       List<double> embedding = [];
-      if (outputValue is List) {
-        embedding = _flatten(outputValue);
+      if (lastHiddenState is List && lastHiddenState.isNotEmpty) {
+        final batch0 = lastHiddenState[0]; // [seq_len, hidden]
+        if (batch0 is List && batch0.isNotEmpty) {
+          final clsVector = batch0[0]; // [hidden] — the [CLS] token
+          embedding = (clsVector as List).map((e) => (e as num).toDouble()).toList();
+        }
       }
 
-      // Cleanup
       inputIdsTensor.release();
       attentionMaskTensor.release();
+      tokenTypeIdsTensor.release();
       if (outputs != null) {
         for (final out in outputs) {
           out?.release();
@@ -79,32 +96,8 @@ class EmbeddingService {
 
       return _normalize(embedding);
     } catch (e) {
-      return _generateMockEmbedding(text);
+      return _generateMockEmbedding(effectiveText);
     }
-  }
-
-  List<int> _tokenize(String text) {
-    final codes = text.codeUnits.map((e) => e % 30000).toList();
-    if (codes.isEmpty) codes.add(0);
-    if (codes.length > 128) {
-      return codes.sublist(0, 128);
-    }
-    return codes;
-  }
-
-  List<double> _flatten(List<dynamic> list) {
-    final result = <double>[];
-    void helper(dynamic item) {
-      if (item is num) {
-        result.add(item.toDouble());
-      } else if (item is List) {
-        for (final x in item) {
-          helper(x);
-        }
-      }
-    }
-    helper(list);
-    return result;
   }
 
   List<double> _normalize(List<double> vector) {

@@ -47,6 +47,7 @@ dependencies:
   timezone: ^0.11.1
   sqlite_vector: ^1.0.0
   onnxruntime: ^1.4.1
+  bert_tokenizer: ^1.1.1
   ffi: ^2.2.0
 
   # On-device LLM inference (llama.cpp GGUF backend via native-assets hooks —

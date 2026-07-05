@@ -121,6 +121,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.4.1"
+  bert_tokenizer:
+    dependency: "direct main"
+    description:
+      name: bert_tokenizer
+      sha256: "172fc8b0dd6a19b7ecb91c490bc2f3115813c6758412fa9d797b3aa94c05a410"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   boolean_selector:
     dependency: transitive
     description:

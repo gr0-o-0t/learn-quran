@@ -58,4 +58,5 @@ app.*
 assets/databases/*.db
 !assets/databases/quran_base.db
 assets/models/*.onnx
+!assets/models/bge_small_en_v1_5.onnx
 assets/models/*.bin
