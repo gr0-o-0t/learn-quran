@@ -55,5 +55,6 @@ app.*
 
 # Local databases and models (if large)
 assets/databases/*.db
+!assets/databases/quran_base.db
 assets/models/*.onnx
 assets/models/*.bin
