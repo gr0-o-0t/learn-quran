@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/providers/repository_providers.dart';
 import '../../core/services/llm_service.dart';
+import '../../core/theme/quran_data.dart';
 import '../../data/repositories/rag_repository.dart';
 import '../../data/local/db/app_database.dart';
 
@@ -18,6 +19,13 @@ const aiSetupPromptDismissedKey = 'ai_setup_prompt_dismissed';
 /// already dismissed the prompt ([dismissedFlag] isn't `'true'`).
 bool needsAiSetupPrompt({required String? modelPath, required String? dismissedFlag}) {
   return modelPath == null && dismissedFlag != 'true';
+}
+
+/// English name for surah [number] (1-114), e.g. 'Al-Fatiha'. Falls back to
+/// the bare number if it's out of range (shouldn't happen with real KB data).
+String _surahName(int number) {
+  if (number < 1 || number > quranSurahs.length) return '$number';
+  return quranSurahs[number - 1]['nameEn'] as String;
 }
 
 class QaAgentScreen extends ConsumerStatefulWidget {
@@ -461,13 +469,13 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
         String textContent = '';
         
         if (res.type == RagSourceType.verse && res.verse != null) {
-          title = 'Surah Al-${res.verse!.surahNumber}:${res.verse!.ayahNumber}';
+          title = 'Surah ${_surahName(res.verse!.surahNumber)} ${res.verse!.surahNumber}:${res.verse!.ayahNumber}';
           textContent = res.verse!.englishText;
         } else if (res.type == RagSourceType.hadith && res.hadith != null) {
           title = '${res.hadith!.bookName} Hadith ${res.hadith!.hadithNumber}';
           textContent = res.hadith!.englishText;
         } else if (res.type == RagSourceType.tafsir && res.tafsir != null) {
-          title = 'Tafsir Al-${res.tafsir!.surahNumber}:${res.tafsir!.ayahNumber}';
+          title = 'Tafsir ${_surahName(res.tafsir!.surahNumber)} ${res.tafsir!.surahNumber}:${res.tafsir!.ayahNumber}';
           textContent = res.tafsir!.contentEnglish;
         }
         

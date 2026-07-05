@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:onnxruntime/onnxruntime.dart';
 import 'package:bert_tokenizer/bert_tokenizer.dart';
@@ -35,8 +36,13 @@ class EmbeddingService {
       final sessionOptions = OrtSessionOptions();
       _session = OrtSession.fromBuffer(bytes.buffer.asUint8List(), sessionOptions);
       _initialized = true;
-    } catch (e) {
-      // Fallback to mock if assets aren't present or init fails (e.g. tests).
+    } catch (e, st) {
+      // Fallback to mock if assets aren't present or init fails (e.g. tests)
+      // — but real embeddings silently degrading to random noise on a real
+      // device is a serious, otherwise-invisible failure, so this must be
+      // loud: every RAG search would look "successful" (valid citations)
+      // while actually retrieving semantically unrelated content.
+      debugPrint('EmbeddingService.init failed, falling back to mock embeddings: $e\n$st');
       _useMock = true;
       _initialized = true;
     }
@@ -94,8 +100,19 @@ class EmbeddingService {
       }
       runOptions.release();
 
+      if (embedding.isEmpty) {
+        debugPrint(
+          'EmbeddingService.getEmbedding got an empty vector from the ONNX '
+          'session for "$effectiveText" — falling back to a mock embedding.',
+        );
+        return _generateMockEmbedding(effectiveText);
+      }
       return _normalize(embedding);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint(
+        'EmbeddingService.getEmbedding failed for "$effectiveText", falling '
+        'back to a mock embedding: $e\n$st',
+      );
       return _generateMockEmbedding(effectiveText);
     }
   }
