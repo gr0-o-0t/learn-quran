@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -23,21 +24,29 @@ class ModelDownloadCancelledException implements Exception {
 /// Downloads GGUF model files from Hugging Face to app-local storage,
 /// resuming partial downloads via HTTP Range requests.
 class ModelDownloadService {
+  static const _defaultIdleTimeout = Duration(seconds: 30);
+
   final http.Client _client;
   final Directory? _modelsDirOverride;
+  final Duration _idleTimeout;
   bool _cancelRequested = false;
 
   ModelDownloadService({http.Client? client})
       : _client = client ?? http.Client(),
-        _modelsDirOverride = null;
+        _modelsDirOverride = null,
+        _idleTimeout = _defaultIdleTimeout;
 
   /// For testing: bypasses path_provider and stores/reads files directly
-  /// under [modelsDir] instead of `<ApplicationDocumentsDirectory>/models`.
+  /// under [modelsDir] instead of `<ApplicationDocumentsDirectory>/models`,
+  /// and allows shrinking the stall-detection [idleTimeout] so tests don't
+  /// have to wait out the real 30s production value.
   ModelDownloadService.forTesting({
     required Directory modelsDir,
     http.Client? client,
+    Duration idleTimeout = _defaultIdleTimeout,
   })  : _client = client ?? http.Client(),
-        _modelsDirOverride = modelsDir;
+        _modelsDirOverride = modelsDir,
+        _idleTimeout = idleTimeout;
 
   Future<Directory> _modelsDir() async {
     final override = _modelsDirOverride;
@@ -107,7 +116,10 @@ class ModelDownloadService {
     var received = resuming ? existingLength : 0;
 
     try {
-      await for (final chunk in response.stream) {
+      // ponytail: CDN downloads can stall silently mid-transfer (e.g. an
+      // edge-cache miss on a specific pinned revision) with no error and no
+      // more bytes — without an idle timeout that hangs the UI forever.
+      await for (final chunk in response.stream.timeout(_idleTimeout)) {
         if (_cancelRequested) {
           throw ModelDownloadCancelledException();
         }

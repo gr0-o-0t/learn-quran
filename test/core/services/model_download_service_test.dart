@@ -1,9 +1,26 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:learn_quran/core/models/model_catalog.dart';
 import 'package:learn_quran/core/services/model_download_service.dart';
+
+/// A client that sends [initialBytes] and then never sends more data and
+/// never closes the stream — reproducing a CDN connection that stalls
+/// mid-transfer instead of erroring or completing.
+class _StallingClient extends http.BaseClient {
+  final List<int> initialBytes;
+  _StallingClient(this.initialBytes);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    // ignore: close_sinks — deliberately never closed, to simulate a stall.
+    final controller = StreamController<List<int>>();
+    controller.add(initialBytes);
+    return http.StreamedResponse(controller.stream, 200, contentLength: 20);
+  }
+}
 
 const _testModel = ModelInfo(
   id: 'test',
@@ -101,6 +118,23 @@ void main() {
       final service = ModelDownloadService.forTesting(modelsDir: tempDir, client: client);
 
       expect(() => service.downloadModel(_testModel), throwsException);
+    });
+
+    test('downloadModel throws instead of hanging forever when the stream stalls', () async {
+      // Simulates a CDN that serves a burst of bytes then goes silent
+      // without closing the connection or erroring — the real-world cause
+      // of a download that appears to freeze partway through.
+      final client = _StallingClient(List.filled(10, 65)); // 10 of 20 bytes, then silence
+      final service = ModelDownloadService.forTesting(
+        modelsDir: tempDir,
+        client: client,
+        idleTimeout: const Duration(milliseconds: 50),
+      );
+
+      await expectLater(
+        () => service.downloadModel(_testModel),
+        throwsA(isA<TimeoutException>()),
+      );
     });
 
     test('deleteModel removes the downloaded file', () async {
