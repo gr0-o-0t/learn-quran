@@ -212,8 +212,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         setState(() {
           _modelDownloaded[model.id] = true;
           _downloadingModelId = null;
+          _selectedModel = model.id;
         });
       }
+      // Auto-select the model that was just downloaded — otherwise
+      // getSelectedModelPath() keeps resolving to whatever was selected
+      // before (or the RAM-based recommendation, which may not be this
+      // model), so the Q&A/Quran setup gates keep showing onboarding even
+      // though a model is now actually downloaded.
+      await _updateSetting('selected_llm_model', model.id);
     } catch (_) {
       if (mounted) {
         setState(() => _downloadingModelId = null);
