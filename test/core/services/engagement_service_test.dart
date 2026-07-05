@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
 import 'package:learn_quran/core/services/engagement_service.dart';
 import 'package:learn_quran/data/local/db/app_database.dart';
+import 'package:learn_quran/data/local/db/knowledge_base_database.dart';
 import 'package:learn_quran/data/repositories/quran_repository.dart';
 import 'package:learn_quran/data/repositories/user_repository.dart';
 
@@ -15,38 +16,39 @@ String _formatDate(DateTime dt) {
 
 void main() {
   late AppDatabase db;
+  late KnowledgeBaseDatabase kbDb;
   late UserRepository userRepo;
   late QuranRepository quranRepo;
   late EngagementService service;
 
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
+    kbDb = KnowledgeBaseDatabase.forTesting(NativeDatabase.memory());
     userRepo = UserRepository(db);
-    quranRepo = QuranRepository(db);
+    quranRepo = QuranRepository(kbDb);
     service = EngagementService(userRepo, quranRepo);
 
-    await db.into(db.verses).insert(VersesCompanion.insert(
+    await kbDb.into(kbDb.verses).insert(VersesCompanion.insert(
           surahNumber: 1,
           ayahNumber: 1,
           juzNumber: 1,
           arabicText: 'arabic',
           englishText: 'Indeed, Allah is with those who have patience.',
           banglaText: 'bangla',
-          hindiText: 'hindi',
         ));
-    await db.into(db.verses).insert(VersesCompanion.insert(
+    await kbDb.into(kbDb.verses).insert(VersesCompanion.insert(
           surahNumber: 1,
           ayahNumber: 2,
           juzNumber: 1,
           arabicText: 'arabic',
           englishText: 'Honor your mother and father.',
           banglaText: 'bangla',
-          hindiText: 'hindi',
         ));
   });
 
   tearDown(() async {
     await db.close();
+    await kbDb.close();
   });
 
   group('EngagementService.logReadingEvent', () {

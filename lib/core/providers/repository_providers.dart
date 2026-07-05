@@ -10,7 +10,7 @@ import '../services/daily_story_service.dart';
 import '../services/llm_service.dart';
 
 final quranRepositoryProvider = Provider<QuranRepository>((ref) {
-  return QuranRepository(ref.watch(appDatabaseProvider));
+  return QuranRepository(ref.watch(knowledgeBaseDatabaseProvider));
 });
 
 final userRepositoryProvider = Provider<UserRepository>((ref) {
@@ -23,7 +23,7 @@ final conversationRepositoryProvider = Provider<ConversationRepository>((ref) {
 
 final ragRepositoryProvider = Provider<RagRepository>((ref) {
   return RagRepository(
-    ref.watch(appDatabaseProvider),
+    ref.watch(knowledgeBaseDatabaseProvider),
     ref.watch(embeddingServiceProvider),
   );
 });

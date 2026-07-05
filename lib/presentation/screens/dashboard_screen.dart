@@ -7,7 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/providers/repository_providers.dart';
 import '../../core/services/prayer_time_service.dart';
 import '../../core/theme/quran_data.dart';
-import '../../data/local/db/app_database.dart';
+import '../../data/local/db/knowledge_base_database.dart';
 import 'surah_detail_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {

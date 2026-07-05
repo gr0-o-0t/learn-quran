@@ -1,8 +1,8 @@
 import 'package:drift/drift.dart';
-import '../local/db/app_database.dart';
+import '../local/db/knowledge_base_database.dart';
 
 class QuranRepository {
-  final AppDatabase _db;
+  final KnowledgeBaseDatabase _db;
 
   QuranRepository(this._db);
 

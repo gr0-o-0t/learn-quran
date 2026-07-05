@@ -1,15 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
-import 'package:learn_quran/data/local/db/app_database.dart';
+import 'package:learn_quran/data/local/db/knowledge_base_database.dart';
 import 'package:learn_quran/data/repositories/quran_repository.dart';
 import 'package:drift/drift.dart' as drift;
 
 void main() {
-  late AppDatabase db;
+  late KnowledgeBaseDatabase db;
   late QuranRepository repository;
 
   setUp(() async {
-    db = AppDatabase.forTesting(NativeDatabase.memory());
+    db = KnowledgeBaseDatabase.forTesting(NativeDatabase.memory());
     repository = QuranRepository(db);
 
     // Seed some test data
@@ -20,8 +20,7 @@ void main() {
           juzNumber: 1,
           arabicText: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
           englishText: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
-          banglaText: 'পরম করুণাময় অসীম দয়ালু আল্লাহর নামে শুরু করছি।',
-          hindiText: 'अल्लाह के नाम से, जो अत्यंत कृपाशील और दयावान है।',
+          banglaText: 'পরম করুণাময় অসীম দয়ালু আল্লাহর নামে শুরু করছি।',
         ));
 
     await db.into(db.verses).insert(VersesCompanion.insert(
@@ -32,7 +31,6 @@ void main() {
           arabicText: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
           englishText: '[All] praise is [due] to Allah, Lord of the worlds -',
           banglaText: 'সব প্রশংসা জগতসমূহের প্রতিপালক আল্লাহর জন্য।',
-          hindiText: 'सब प्रशंसा अल्लाह के लिए है, जो सारे संसार का पालनहार है।',
         ));
 
     await db.into(db.hadiths).insert(HadithsCompanion.insert(
@@ -42,8 +40,7 @@ void main() {
           chapterTitle: 'Revelation',
           arabicText: 'إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ',
           englishText: 'Actions are but by intention...',
-          banglaText: 'কাজ নিয়তের ওপর নির্ভরশীল...',
-          hindiText: 'कर्मों का दारोमदार नीयत पर है...',
+          banglaText: 'কাজ নিয়তের ওপর নির্ভরশীল...',
         ));
 
     await db.into(db.tafsirs).insert(TafsirsCompanion.insert(
@@ -52,8 +49,7 @@ void main() {
           ayahNumber: 1,
           author: 'Ibn Kathir',
           contentEnglish: 'Tafsir of verse 1...',
-          contentBangla: '১ নম্বর আয়াতের তাফসীর...',
-          contentHindi: 'आयत १ की तफ़्सीर...',
+          contentBangla: '১ নম্বর আয়াতের তাফসীর...',
         ));
   });
 
