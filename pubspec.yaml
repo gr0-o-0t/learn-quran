@@ -16,21 +16,21 @@ dependencies:
   riverpod_annotation: ^4.0.3
 
   # Databases & FFI
-  drift: ^2.16.0
+  drift: ^2.34.0
   sqlite3_flutter_libs: ^0.6.0+eol
-  sqlite3: ^3.0.0
-  path_provider: ^2.1.2
-  path: ^1.9.0
+  sqlite3: ^3.3.4
+  path_provider: ^2.1.6
+  path: ^1.9.1
 
   # Utilities
-  uuid: ^4.3.3
+  uuid: ^4.5.3
   geolocator: ^14.0.3
-  adhan: ^2.0.0 # Prayer times calculation
+  adhan: ^2.0.0+1 # Prayer times calculation
 
   # UI / Audio / Notifications
   google_fonts: ^8.1.0
-  audioplayers: ^6.0.0
-  flutter_local_notifications: ^22.0.0
+  audioplayers: ^6.8.1
+  flutter_local_notifications: ^22.0.1
   android_alarm_manager_plus: ^5.1.0
 
   # Runtime model downloads
@@ -38,8 +38,8 @@ dependencies:
   connectivity_plus: ^7.2.0
 
   # Cupertino Icons
-  cupertino_icons: ^1.0.6
-  timezone: ^0.11.0
+  cupertino_icons: ^1.0.9
+  timezone: ^0.11.1
   sqlite_vector: ^1.0.0
   onnxruntime: ^1.4.1
   ffi: ^2.2.0
@@ -48,8 +48,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  drift_dev: ^2.16.0
-  build_runner: ^2.4.8
+  drift_dev: ^2.34.0 # 2.34.1+1 exists but needs analyzer ^13.0.0, which conflicts with riverpod_generator ^4.0.4 (latest, needs analyzer ^12.0.0)
+  build_runner: ^2.15.0
   riverpod_generator: ^4.0.4
 
 flutter:
