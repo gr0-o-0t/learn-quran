@@ -80,13 +80,20 @@ jobs:
       # connectivity_plus (>=7.1.0) references NWPath.isUltraConstrained,
       # declared only in the macOS/iOS 26 SDKs — the runner's default
       # Xcode (16.4) predates it. Xcode 26.1.1 is connectivity_plus's own
-      # documented minimum and is preinstalled on the runner image, but
-      # its Simulator runtime isn't registered for a non-default Xcode
-      # until -runFirstLaunch runs, otherwise `--simulator` builds fail to
-      # resolve a destination.
+      # documented minimum and is preinstalled on the runner image.
+      # CoreSimulatorService can keep caching the *previous* Xcode's
+      # platform list after a mid-job xcode-select switch, which makes
+      # `--simulator` builds fail to resolve a destination even though
+      # the iOS 26.1 simulator is installed — kill it so it respawns
+      # against the newly selected Xcode, and dump what's actually
+      # registered for diagnosis if this still fails.
       - run: |
           sudo xcode-select -s /Applications/Xcode_26.1.1.app
           sudo xcodebuild -runFirstLaunch
+          sudo killall -9 com.apple.CoreSimulator.CoreSimulatorService || true
+          xcodebuild -showsdks
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
 
       - uses: actions/cache@v4
         with:
