@@ -14,10 +14,10 @@ void main() {
       expect(
         kCurrentKb.sizeBytes,
         greaterThan(0),
-        reason: 'Run Task 10 (cut the kb-v1.0.0 release) and hardcode the '
+        reason: 'Run Task 9 (cut the kb-v1.0.0 release) and hardcode the '
             'real byte count here — see kb_catalog.dart\'s TODO.',
       );
     },
-    skip: 'Intentionally skipped until Task 10 publishes a real kb-v1.0.0 release.',
+    skip: 'Intentionally skipped until Task 9 publishes a real kb-v1.0.0 release.',
   );
 }
