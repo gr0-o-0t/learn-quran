@@ -38,6 +38,10 @@ jobs:
 
       - run: flutter pub get
 
+      # *.g.dart (Drift tables/companions, Riverpod providers) are
+      # gitignored — generate them here, same as local dev.
+      - run: dart run build_runner build --delete-conflicting-outputs
+
       # No android/key.properties secret is configured, so this falls back
       # to debug signing (android/app/build.gradle.kts already handles that
       # gracefully) — fine for a build-verification artifact, but this is
@@ -65,19 +69,27 @@ jobs:
 
       - run: flutter pub get
 
-      # No Apple Developer signing certificates/provisioning profiles are
-      # configured, so this builds an unsigned .app for compile-verification
-      # only — it proves the dart:ffi/native code actually builds under a
-      # real Xcode toolchain (which this project's own dev sandbox cannot
-      # do at all). It is not an installable/distributable IPA.
-      - run: flutter build ios --release --no-codesign
+      # *.g.dart (Drift tables/companions, Riverpod providers) are
+      # gitignored — generate them here, same as local dev.
+      - run: dart run build_runner build --delete-conflicting-outputs
 
-      - run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app Runner-iOS-unsigned.zip
+      # No Apple Developer signing certificates/provisioning profiles are
+      # configured. --no-codesign alone isn't enough for a device
+      # (ios-release/arm64) build — Xcode still resolves a signing identity
+      # during embed/dSYM and fails without a Development Team. Building
+      # for the simulator instead needs no signing at all (this is exactly
+      # what Flutter's own error message for the device case recommends),
+      # while still proving the dart:ffi/native code compiles under a real
+      # Xcode toolchain, which this project's own dev sandbox cannot do at
+      # all. It is not an installable/distributable on-device IPA.
+      - run: flutter build ios --release --no-codesign --simulator
+
+      - run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app Runner-iOS-simulator-unsigned.zip
 
       - uses: actions/upload-artifact@v7
         with:
           name: ios-app-unsigned
-          path: Runner-iOS-unsigned.zip
+          path: Runner-iOS-simulator-unsigned.zip
           if-no-files-found: error
 
   macos:
@@ -93,6 +105,10 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      # *.g.dart (Drift tables/companions, Riverpod providers) are
+      # gitignored — generate them here, same as local dev.
+      - run: dart run build_runner build --delete-conflicting-outputs
 
       # Same signing caveat as iOS: no Developer ID certificate configured,
       # so codesigning is disabled and the .app is unsigned/build-verification
@@ -123,6 +139,10 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      # *.g.dart (Drift tables/companions, Riverpod providers) are
+      # gitignored — generate them here, same as local dev.
+      - run: dart run build_runner build --delete-conflicting-outputs
 
       - run: flutter build windows --release
 
@@ -156,6 +176,10 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      # *.g.dart (Drift tables/companions, Riverpod providers) are
+      # gitignored — generate them here, same as local dev.
+      - run: dart run build_runner build --delete-conflicting-outputs
 
       - run: flutter build linux --release
 
