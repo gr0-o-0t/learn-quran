@@ -1,3 +1,6 @@
+# Git worktrees (agent-managed scratch workspaces)
+.worktrees/
+
 # Miscellaneous
 *.class
 *.log
