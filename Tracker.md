@@ -90,7 +90,25 @@ This file is updated dynamically to reflect the completion status of all tasks.
     `android/key.properties` and the keystore for real production signing
     credentials before an actual Play Store release. No iOS target was
     scaffolded (no Mac/Xcode available in this environment).
+    UPDATE (2026-07-05): iOS was subsequently scaffolded (see Task 9.2) but
+    remains unbuildable here — still no Mac/Xcode/CocoaPods available.
 
 ### Phase 9: Permissions Onboarding
 *   [x] **Task 9.1:** Build one-time permissions onboarding flow (notifications + exact-alarm scheduling) and a Settings fallback status card. (Completed: 2026-07-04)
     See design: [docs/superpowers/specs/2026-07-04-permissions-onboarding-design.md](docs/superpowers/specs/2026-07-04-permissions-onboarding-design.md)
+*   [x] **Task 9.2:** Address known-issues cleanup pass. (Completed: 2026-07-05)
+    - Fixed all 64 pre-existing `flutter analyze` info-level lints (0
+      remaining): quote-style, deprecated `withOpacity`/`activeColor`/
+      RadioListTile `groupValue`/`onChanged` APIs, missing `const`,
+      unawaited future, `use_super_parameters`, and a documented
+      `ignore_for_file` for `llama_ffi.dart`'s intentionally C-mirroring
+      typedef names.
+    - Revisited three Minor findings accepted-as-is during the Phase 9.1
+      review: guarded `PermissionsOnboardingScreen`'s Skip button against
+      double-tap, parallelized Settings' permission checks with
+      `Future.wait`, and added a `Platform.isAndroid` guard to
+      `_AppEntryGate` so non-Android platforms skip onboarding.
+    - Scaffolded the `ios/` platform directory (`flutter create
+      --platforms=ios`) — best-effort only, still unbuildable without a
+      Mac/Xcode/CocoaPods. Real iOS signing credentials and iOS-side
+      permission handling remain out of reach in this environment.
