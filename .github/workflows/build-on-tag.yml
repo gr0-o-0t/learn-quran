@@ -63,12 +63,18 @@ jobs:
       # gracefully) — fine for a build-verification artifact, but this is
       # NOT a Play Store-ready release. Add key.properties/keystore secrets
       # here to produce a real release-signed build.
-      - run: flutter build apk --release
+      #
+      # --split-per-abi produces one APK per ABI (armeabi-v7a, arm64-v8a,
+      # x86_64) instead of one fat APK carrying all three sets of native
+      # libraries — smaller downloads for direct-APK distribution (this
+      # release job, not Play Store, which already does its own splitting
+      # from an AAB).
+      - run: flutter build apk --release --split-per-abi
 
       - uses: actions/upload-artifact@v7
         with:
           name: android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
 
   ios:
