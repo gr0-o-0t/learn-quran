@@ -6,7 +6,6 @@ import '../../core/theme/quran_data.dart';
 import '../../core/providers/repository_providers.dart';
 import 'surah_detail_screen.dart';
 import 'juz_detail_screen.dart';
-import 'settings_screen.dart';
 
 /// Engagement-value key: once the user dismisses the knowledge-base setup
 /// prompt (or finishes it with the knowledge base downloaded), this screen
@@ -21,7 +20,19 @@ bool needsKbSetupPrompt({required bool hasContent, required String? dismissedFla
 }
 
 class QuranReaderScreen extends ConsumerStatefulWidget {
-  const QuranReaderScreen({super.key});
+  const QuranReaderScreen({super.key, required this.onNavigateToSettings, required this.isActive});
+
+  /// Switches AppShell's bottom-nav selection to the Settings tab, reusing
+  /// its single long-lived instance (and any download already in progress
+  /// on it) instead of pushing a disconnected new one — see the "moving to
+  /// another page halts the download" bug this replaced.
+  final VoidCallback onNavigateToSettings;
+
+  /// True while this is AppShell's currently selected tab. Lets this screen
+  /// detect "the user came back to this tab" (e.g. after downloading the
+  /// knowledge base from Settings) so the setup gate can re-check itself,
+  /// since switching tabs doesn't re-run `initState`.
+  final bool isActive;
 
   @override
   ConsumerState<QuranReaderScreen> createState() => _QuranReaderScreenState();
@@ -37,6 +48,14 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
     Future.microtask(() => _checkKbSetup());
   }
 
+  @override
+  void didUpdateWidget(QuranReaderScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _checkKbSetup();
+    }
+  }
+
   Future<void> _checkKbSetup() async {
     final quranRepo = ref.read(quranRepositoryProvider);
     final userRepo = ref.read(userRepositoryProvider);
@@ -48,16 +67,6 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
         _checkingKbSetup = false;
       });
     }
-  }
-
-  Future<void> _openKbSetup() async {
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('Set Up Knowledge Base')),
-        body: const SettingsScreen(),
-      ),
-    ));
-    await _checkKbSetup();
   }
 
   Future<void> _skipKbSetup() async {
@@ -74,7 +83,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
       );
     }
     if (_needsKbSetup) {
-      return _KbSetupPrompt(onSetUp: _openKbSetup, onSkip: _skipKbSetup);
+      return _KbSetupPrompt(onSetUp: widget.onNavigateToSettings, onSkip: _skipKbSetup);
     }
 
     return DefaultTabController(

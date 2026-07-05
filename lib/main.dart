@@ -180,17 +180,26 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  static const _settingsTabIndex = 3;
+
   int _currentIndex = 0;
 
-  static const List<Widget> _screens = [
-    DashboardScreen(),
-    QuranReaderScreen(),
-    QaAgentScreen(),
-    SettingsScreen(),
-  ];
+  void _switchToSettingsTab() => setState(() => _currentIndex = _settingsTabIndex);
 
   @override
   Widget build(BuildContext context) {
+    // Not `static const`: QuranReaderScreen/QaAgentScreen need to know
+    // whether they're the active tab (isActive) so they can re-check their
+    // setup gate after the user downloads something from Settings without
+    // leaving this IndexedStack — see onNavigateToSettings below, which
+    // switches tabs instead of pushing a disconnected second SettingsScreen
+    // (that duplicate used to silently orphan any in-progress download).
+    final screens = [
+      const DashboardScreen(),
+      QuranReaderScreen(onNavigateToSettings: _switchToSettingsTab, isActive: _currentIndex == 1),
+      QaAgentScreen(onNavigateToSettings: _switchToSettingsTab, isActive: _currentIndex == 2),
+      const SettingsScreen(),
+    ];
     return Scaffold(
       appBar: (_currentIndex == 2 || _currentIndex == 3)
           ? null
@@ -200,7 +209,7 @@ class _AppShellState extends State<AppShell> {
             ),
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

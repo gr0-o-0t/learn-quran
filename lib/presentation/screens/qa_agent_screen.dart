@@ -8,7 +8,6 @@ import '../../core/providers/repository_providers.dart';
 import '../../core/services/llm_service.dart';
 import '../../data/repositories/rag_repository.dart';
 import '../../data/local/db/app_database.dart';
-import 'settings_screen.dart';
 
 /// Engagement-value key: once the user dismisses the AI setup prompt (or
 /// finishes it with a model downloaded), this screen stops re-showing it.
@@ -22,7 +21,19 @@ bool needsAiSetupPrompt({required String? modelPath, required String? dismissedF
 }
 
 class QaAgentScreen extends ConsumerStatefulWidget {
-  const QaAgentScreen({super.key});
+  const QaAgentScreen({super.key, required this.onNavigateToSettings, required this.isActive});
+
+  /// Switches AppShell's bottom-nav selection to the Settings tab, reusing
+  /// its single long-lived instance (and any download already in progress
+  /// on it) instead of pushing a disconnected new one — see the "moving to
+  /// another page halts the download" bug this replaced.
+  final VoidCallback onNavigateToSettings;
+
+  /// True while this is AppShell's currently selected tab. Lets this screen
+  /// detect "the user came back to this tab" (e.g. after downloading a
+  /// model from Settings) so the setup gate can re-check itself, since
+  /// switching tabs doesn't re-run `initState`.
+  final bool isActive;
 
   @override
   ConsumerState<QaAgentScreen> createState() => _QaAgentScreenState();
@@ -53,6 +64,14 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
     Future.microtask(() => _initChat());
   }
 
+  @override
+  void didUpdateWidget(QaAgentScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _checkAiSetup();
+    }
+  }
+
   Future<void> _checkAiSetup() async {
     final llmService = ref.read(llmServiceProvider);
     final userRepo = ref.read(userRepositoryProvider);
@@ -64,16 +83,6 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
         _checkingAiSetup = false;
       });
     }
-  }
-
-  Future<void> _openAiSetup() async {
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('Set Up AI Model')),
-        body: const SettingsScreen(),
-      ),
-    ));
-    await _checkAiSetup();
   }
 
   Future<void> _skipAiSetup() async {
@@ -524,7 +533,7 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
       );
     }
     if (_needsAiSetup) {
-      return _AiSetupPrompt(onSetUp: _openAiSetup, onSkip: _skipAiSetup);
+      return _AiSetupPrompt(onSetUp: widget.onNavigateToSettings, onSkip: _skipAiSetup);
     }
 
     return SafeArea(
