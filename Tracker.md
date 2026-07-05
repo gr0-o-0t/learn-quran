@@ -120,3 +120,25 @@ This file is updated dynamically to reflect the completion status of all tasks.
     only checked `Platform.isLinux`, so it always fell back to a hardcoded
     4.0GB on real Android devices — the RAM-based recommendation never
     worked before this. Now checks `Platform.isAndroid` too.
+
+### Phase 11: Multi-Platform Configuration
+*   [x] **Task 11.1:** Scaffold Linux, Windows, and macOS platform targets (`flutter create --platforms=linux,windows,macos`). (Completed: 2026-07-05)
+    Same native FFI/sqlite3 story as Android/iOS (`NativeDatabase`,
+    `dart:ffi`) — no database-layer changes needed. Linux desktop toolchain
+    (clang, ninja, GTK3 dev headers, GStreamer for `audioplayers_linux`) was
+    installed and `flutter build linux --debug` succeeds and runs — the only
+    platform besides Android with a genuine, verified build in this
+    environment. Windows/macOS remain scaffold-only (no matching build host
+    here); same treatment as iOS.
+*   [ ] **Task 11.2:** Web platform.
+    BLOCKED — not an environment limitation, a real code incompatibility:
+    `flutter build web` fails outright (`Error: Only JS interop members may
+    be 'external'`) because `onnxruntime`'s and `llama_ffi.dart`'s `dart:ffi`
+    bindings, and Drift's `NativeDatabase`, cannot compile to JS at all. This
+    app's entire storage/inference stack is FFI-based. Making web work for
+    real means separate web implementations for each: Drift's WASM backend,
+    a JS-interop embedding runtime, and a browser-capable LLM runtime (e.g.
+    wllama/web-llm) in place of llama.cpp — a multi-week architecture
+    project, not a config change. Scaffold was generated, verified broken,
+    then reverted rather than leaving a platform directory that implies
+    false support.
