@@ -112,3 +112,11 @@ This file is updated dynamically to reflect the completion status of all tasks.
       --platforms=ios`) — best-effort only, still unbuildable without a
       Mac/Xcode/CocoaPods. Real iOS signing credentials and iOS-side
       permission handling remain out of reach in this environment.
+
+### Phase 10: Runtime Model Download
+*   [x] **Task 10.1:** Build runtime Gemma 4 model download (Hugging Face, resumable), device-RAM-based recommendation, and Settings UI (download/progress/delete/Wi-Fi-only toggle). (Completed: 2026-07-05)
+    See design: [docs/superpowers/specs/2026-07-05-model-download-design.md](docs/superpowers/specs/2026-07-05-model-download-design.md)
+    Fixed a real bug found along the way: `LlmService._detectDeviceRamGb()`
+    only checked `Platform.isLinux`, so it always fell back to a hardcoded
+    4.0GB on real Android devices — the RAM-based recommendation never
+    worked before this. Now checks `Platform.isAndroid` too.
