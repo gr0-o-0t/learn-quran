@@ -47,13 +47,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _checkPermissions() async {
     final notifService = ref.read(notificationServiceProvider);
-    final notifsEnabled = await notifService.areNotificationsEnabled();
-    final exactAlarmsEnabled =
-        await notifService.canScheduleExactNotifications();
+    final results = await Future.wait([
+      notifService.areNotificationsEnabled(),
+      notifService.canScheduleExactNotifications(),
+    ]);
     if (mounted) {
       setState(() {
-        _notificationsEnabled = notifsEnabled ?? false;
-        _exactAlarmsEnabled = exactAlarmsEnabled ?? false;
+        _notificationsEnabled = results[0] ?? false;
+        _exactAlarmsEnabled = results[1] ?? false;
         _checkingPermissions = false;
       });
     }

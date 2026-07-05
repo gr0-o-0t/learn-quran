@@ -24,6 +24,10 @@ class _PermissionsOnboardingScreenState
   bool _isRequesting = false;
 
   Future<void> _finish() async {
+    // Guards against a rapid double-tap on "Skip" invoking this twice —
+    // the Enable path already goes through _enableReminders, which sets
+    // this before ever calling _finish.
+    setState(() => _isRequesting = true);
     final userRepo = ref.read(userRepositoryProvider);
     await userRepo.setEngagementValue(
         'permissions_onboarding_completed', 'true');

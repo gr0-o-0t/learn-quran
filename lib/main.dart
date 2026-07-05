@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
@@ -69,6 +70,18 @@ class _AppEntryGateState extends ConsumerState<_AppEntryGate> {
   }
 
   Future<void> _checkOnboardingStatus() async {
+    // The permissions this flow requests (POST_NOTIFICATIONS, exact alarms)
+    // are Android-only; skip straight to the app shell everywhere else.
+    if (!Platform.isAndroid) {
+      if (mounted) {
+        setState(() {
+          _onboardingCompleted = true;
+          _loading = false;
+        });
+      }
+      return;
+    }
+
     final userRepo = ref.read(userRepositoryProvider);
     try {
       final completed = await userRepo
