@@ -35,6 +35,7 @@ dependencies:
 
   # Runtime model downloads
   http: ^1.6.0
+  crypto: ^3.0.7
   # Pinned below 7.1.0: that and later reference NWPath.isUltraConstrained,
   # which only exists in the macOS/iOS 26 SDKs. Our usage (checkConnectivity
   # + ConnectivityResult.wifi) has been stable since well before 7.0.0, so

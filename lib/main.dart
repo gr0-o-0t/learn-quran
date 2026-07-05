@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/models/kb_catalog.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/background_worker_service.dart';
+import 'core/services/kb_download_service.dart';
 import 'core/providers/database_provider.dart';
 import 'core/providers/repository_providers.dart';
+import 'data/local/db/knowledge_base_database.dart';
 import 'presentation/screens/dashboard_screen.dart';
 import 'presentation/screens/quran_reader_screen.dart';
 import 'presentation/screens/qa_agent_screen.dart';
@@ -14,7 +17,7 @@ import 'presentation/screens/permissions_onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final knowledgeBaseDatabase = await openKnowledgeBaseDatabase();
+  final knowledgeBaseDatabase = await _openKnowledgeBaseDatabaseSafely();
   // Best-effort: never let background-alarm setup delay or block app startup.
   unawaited(_scheduleBackgroundPrayerWorker());
   runApp(
@@ -25,6 +28,32 @@ Future<void> main() async {
       child: const LearnQuranApp(),
     ),
   );
+}
+
+/// Opens the knowledge base database, forcing an actual read so a corrupt
+/// on-disk file — e.g. one left over from a download bug, or corrupted by
+/// anything else — surfaces here, inside `main()` before `runApp()`, instead
+/// of crashing later deep inside the widget tree. If opening or reading
+/// throws, the bad file is deleted and we retry once, which then opens (or
+/// creates) a fresh, empty database instead. A bad knowledge base file
+/// should never be able to brick app startup.
+Future<KnowledgeBaseDatabase> _openKnowledgeBaseDatabaseSafely() async {
+  KnowledgeBaseDatabase? db;
+  try {
+    db = await openKnowledgeBaseDatabase();
+    // Drift opens the underlying file lazily on first use, so force that
+    // now rather than letting a corrupt file surface unguarded later.
+    await db.customSelect('SELECT 1').getSingleOrNull();
+    return db;
+  } catch (_) {
+    await db?.close();
+    final path = await KbDownloadService().localPathFor(kCurrentKb);
+    final badFile = File(path);
+    if (await badFile.exists()) {
+      await badFile.delete();
+    }
+    return openKnowledgeBaseDatabase();
+  }
 }
 
 Future<void> _scheduleBackgroundPrayerWorker() async {
