@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/providers/repository_providers.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/llm_service.dart';
+import '../../core/services/model_download_service.dart';
+import '../../core/models/model_catalog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -21,6 +25,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _notificationsEnabled = false;
   bool _exactAlarmsEnabled = false;
   bool _checkingPermissions = true;
+  Map<String, bool> _modelDownloaded = {};
+  String? _recommendedModelId;
+  String? _downloadingModelId;
+  double _downloadProgress = 0.0;
+  bool _wifiOnlyDownloads = true;
 
   @override
   void initState() {
@@ -28,6 +37,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     WidgetsBinding.instance.addObserver(this);
     Future.microtask(() => _loadSettings());
     _checkPermissions();
+    _checkModelStatuses();
   }
 
   @override
@@ -74,12 +84,179 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     await _checkPermissions();
   }
 
+  Future<void> _checkModelStatuses() async {
+    final downloadService = ref.read(modelDownloadServiceProvider);
+    final statuses = <String, bool>{};
+    for (final model in kModelCatalog) {
+      statuses[model.id] = await downloadService.isDownloaded(model);
+    }
+    final ramGb = ref.read(llmServiceProvider).detectDeviceRamGb();
+    if (mounted) {
+      setState(() {
+        _modelDownloaded = statuses;
+        _recommendedModelId = recommendedModelFor(ramGb).id;
+      });
+    }
+  }
+
+  String _formatSize(int bytes) {
+    final gb = bytes / (1024 * 1024 * 1024);
+    return '${gb.toStringAsFixed(1)}GB';
+  }
+
+  Future<void> _downloadModel(ModelInfo model) async {
+    if (_wifiOnlyDownloads) {
+      final results = await Connectivity().checkConnectivity();
+      if (!results.contains(ConnectivityResult.wifi)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Turn off Wi-Fi-only downloads in Settings, or connect to Wi-Fi, to download this model.'),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Download ${model.displayName}?'),
+        content: Text(
+            'This will download ${_formatSize(model.sizeBytes)} from Hugging Face.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _downloadingModelId = model.id;
+      _downloadProgress = 0.0;
+    });
+
+    try {
+      await ref.read(modelDownloadServiceProvider).downloadModel(
+        model,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() => _downloadProgress = progress.fraction);
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _modelDownloaded[model.id] = true;
+          _downloadingModelId = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _downloadingModelId = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Failed to download ${model.displayName}. Tap Download to retry.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteModel(ModelInfo model) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${model.displayName}?'),
+        content: const Text('You can download it again later.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await ref.read(modelDownloadServiceProvider).deleteModel(model);
+    if (mounted) {
+      setState(() => _modelDownloaded[model.id] = false);
+    }
+  }
+
+  Widget _buildModelRow(ThemeData theme, ModelInfo model) {
+    final isDownloaded = _modelDownloaded[model.id] ?? false;
+    final isDownloading = _downloadingModelId == model.id;
+    final isRecommended = _recommendedModelId == model.id;
+
+    final titleText = Text(
+      isRecommended ? '${model.displayName} • Recommended' : model.displayName,
+      style: theme.textTheme.bodyMedium,
+    );
+    final subtitleText = Text(
+      '${_formatSize(model.sizeBytes)} — ${model.description}',
+      style: theme.textTheme.labelLarge,
+    );
+
+    if (isDownloading) {
+      return ListTile(
+        title: titleText,
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: LinearProgressIndicator(
+            value: _downloadProgress,
+            color: AppTheme.emeraldGreen,
+          ),
+        ),
+      );
+    }
+
+    if (isDownloaded) {
+      return RadioListTile<String>(
+        title: titleText,
+        subtitle: subtitleText,
+        value: model.id,
+        activeColor: AppTheme.emeraldGreen,
+        secondary: IconButton(
+          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+          onPressed: () => _deleteModel(model),
+        ),
+      );
+    }
+
+    return ListTile(
+      title: titleText,
+      subtitle: subtitleText,
+      trailing: TextButton(
+        onPressed: () => _downloadModel(model),
+        child: const Text('Download'),
+      ),
+    );
+  }
+
   Future<void> _loadSettings() async {
     final userRepo = ref.read(userRepositoryProvider);
     final lang = await userRepo.getEngagementValue('selected_language') ?? 'English';
     final model = await userRepo.getEngagementValue('selected_llm_model') ?? 'e2b';
     final method = await userRepo.getEngagementValue('calculation_method') ?? 'muslim_world_league';
     final notifs = await userRepo.getEngagementValue('salat_notifications') ?? 'true';
+    final wifiOnly = await userRepo.getEngagementValue('wifi_only_model_downloads') ?? 'true';
 
     if (mounted) {
       setState(() {
@@ -87,6 +264,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         _selectedModel = model;
         _calculationMethod = method;
         _salatNotifications = notifs == 'true';
+        _wifiOnlyDownloads = wifiOnly == 'true';
       });
     }
   }
@@ -203,25 +381,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     }
                   },
                   child: Column(
-                    children: [
-                      RadioListTile<String>(
-                        title: Text('Gemma 4 e2b (Lighter)',
-                            style: theme.textTheme.bodyMedium),
-                        subtitle: Text('Recommended for devices with <6GB RAM',
-                            style: theme.textTheme.labelLarge),
-                        value: 'e2b',
-                        activeColor: AppTheme.emeraldGreen,
-                      ),
-                      RadioListTile<String>(
-                        title: Text('Gemma 4 e4b (Standard)',
-                            style: theme.textTheme.bodyMedium),
-                        subtitle: Text('Recommended for devices with ≥6GB RAM',
-                            style: theme.textTheme.labelLarge),
-                        value: 'e4b',
-                        activeColor: AppTheme.emeraldGreen,
-                      ),
-                    ],
+                    children: kModelCatalog
+                        .map((model) => _buildModelRow(theme, model))
+                        .toList(),
                   ),
+                ),
+                SwitchListTile(
+                  title: Text('Wi-Fi only downloads', style: theme.textTheme.bodyMedium),
+                  subtitle: Text('Avoid using cellular data for multi-GB model downloads',
+                      style: theme.textTheme.labelLarge),
+                  value: _wifiOnlyDownloads,
+                  activeThumbColor: AppTheme.emeraldGreen,
+                  onChanged: (val) {
+                    setState(() => _wifiOnlyDownloads = val);
+                    _updateSetting('wifi_only_model_downloads', val.toString());
+                  },
                 ),
               ],
             ),
