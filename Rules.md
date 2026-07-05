@@ -12,7 +12,7 @@ These rules represent hard constraints that must be followed by all developers a
 ---
 
 ## 2. Technical & Offline-First Constraints
-*   **No Unapproved Networks:** Core packages must not make any external network requests. All dependencies (translations, databases) must reside locally in assets or application sandboxes. Exception: LLM model *files* may be fetched at runtime from Hugging Face, user-initiated, so users aren't forced to ship multi-GB weights in the app bundle. Once downloaded, all inference and RAG indexing still run fully on-device — no other network calls are introduced.
+*   **No Unapproved Networks:** Core packages must not make any external network requests. All dependencies (translations, databases) must reside locally in assets or application sandboxes. Exception: LLM model *files* may be fetched at runtime from Hugging Face, user-initiated, so users aren't forced to ship multi-GB weights in the app bundle. Once downloaded, all inference and RAG indexing still run fully on-device — no other network calls are introduced. Exception: the Quran/Hadith/Tafsir knowledge base and its embeddings may also be fetched at runtime from a versioned, pinned GitHub Release, user-initiated, so corrections/expansions don't require a full app-store release. The initial knowledge base ships bundled as an asset so the app works fully offline from first launch — only updates are network-fetched.
 *   **Flutter Architecture:**
     *   Follow **Clean Architecture**: Never mix UI logic with data manipulation or FFI invocation.
     *   Keep business logic completely decoupled from view representations.

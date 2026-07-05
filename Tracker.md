@@ -142,3 +142,41 @@ This file is updated dynamically to reflect the completion status of all tasks.
     project, not a config change. Scaffold was generated, verified broken,
     then reverted rather than leaving a platform directory that implies
     false support.
+
+### Phase 12: Knowledge Base v1 (Content + Real Embeddings)
+*   [x] **Task 12.1:** Replace the placeholder 7-verse/1-hadith/1-tafsir database with a complete, authentically-sourced Quran (6,236 verses, Arabic/English/Bengali), Hadith (Sahih al-Bukhari + Sahih Muslim, Arabic/English/Bengali), and Tafsir Ibn Kathir (English/Bengali) knowledge base. (Completed: 2026-07-05)
+    See design: [docs/superpowers/specs/2026-07-05-knowledge-base-v1-design.md](docs/superpowers/specs/2026-07-05-knowledge-base-v1-design.md)
+    Two previously-undiscovered gaps fixed: (1) the Quran reader itself only
+    ever showed Al-Fatiha — this was core functionality, not just a RAG
+    issue; (2) `EmbeddingService` always used a `Random(text.hashCode)` mock
+    vector and a fake char-code tokenizer, so RAG search ran correct code
+    over meaningless data. Replaced with real BGE-small-en-v1.5 embeddings
+    (real WordPiece tokenizer via `bert_tokenizer`) precomputed offline by
+    `tool/build_kb.dart`, shipped in a separate, always-read-only
+    `KnowledgeBaseDatabase` (`kb.db`), versioned and updatable from Settings
+    via a new `KbDownloadService` (mirrors `ModelDownloadService`).
+    Originally designed to ship bundled in the app by default (the design
+    doc still shows this as the initial decision) — reversed after actually
+    trying to push it: `kb.db` is 247MB, and GitHub hard-rejects any
+    git-tracked file over 100MB. Rewrote git history to strip the blob,
+    then pivoted to download-required, exactly like the AI model already
+    works: the app ships with **no** Quran/Hadith/Tafsir content out of the
+    box, `KnowledgeBaseDatabase` opens an empty schema until the user
+    downloads `kb.db` from Settings, and `QuranReaderScreen` shows a setup
+    prompt (mirroring the AI-setup one) until then.
+    The real download size for `kb_catalog.dart` is pending confirmation of
+    the `kb-v1.0.0` GitHub Actions run.
+    Also discovered along the way: `sqlite-vec`/`vec0` (Task 4.1, marked
+    Completed) does not actually load in this environment —
+    `hasVectorExtension` is false, `CREATE VIRTUAL TABLE ... USING vec0`
+    throws `no such module: vec0`. The app was always silently using its
+    Dart-side fallback search. `kb.db` is now built against that
+    confirmed-working fallback shape rather than depending on the
+    unconfirmed native path. Root-causing why sqlite-vec doesn't load is a
+    separate, deferred follow-up.
+*   [ ] **Task 12.2:** AI-translation-on-demand (Hindi and other languages), using the already-wired on-device LLM, with a persistent "AI-translated, may be inaccurate" notice.
+    Deferred — separate design discussion, per the knowledge-base-v1 design doc's Decision Log.
+*   [ ] **Task 12.3:** Personalization RAG over the user's own chat/prayer history, to "nudge like a teacher."
+    Deferred — separate design discussion, per the knowledge-base-v1 design doc's Decision Log.
+*   [ ] **Task 12.4:** Root-cause why `sqlite-vec`/`vec0` doesn't load natively in this environment, and fix it if a real device/CI matrix shows the same failure.
+    Newly discovered, not previously tracked. Not blocking — the Dart-side fallback search already works and is what Task 12.1 built against.

@@ -1,26 +1,37 @@
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
 import 'package:drift/drift.dart' as drift;
-import 'package:learn_quran/data/local/db/app_database.dart';
+import 'package:learn_quran/data/local/db/knowledge_base_database.dart';
 import 'package:learn_quran/data/repositories/rag_repository.dart';
 import 'package:learn_quran/core/services/embedding_service.dart';
 
+/// Mirrors what the offline `tool/build_kb.dart` writes into
+/// `vec_knowledge_base` at build time — embeddings are never generated
+/// on-device anymore (see RagRepository.search).
+Future<void> _insertVector(KnowledgeBaseDatabase db, int rowid, List<double> embedding) async {
+  final float32list = Float32List.fromList(embedding);
+  final blob = float32list.buffer.asUint8List();
+  await db.customStatement(
+    'INSERT OR REPLACE INTO vec_knowledge_base(rowid, embedding) VALUES (?, ?)',
+    [rowid, blob],
+  );
+}
+
 void main() {
-  late AppDatabase db;
+  late KnowledgeBaseDatabase db;
   late EmbeddingService embeddingService;
   late RagRepository repository;
 
   setUp(() async {
     // We use NativeDatabase.memory() for unit testing Drift.
-    // The AppDatabase onCreate/beforeOpen will load the sqlite-vec extension
-    // and initialize the vec_knowledge_base virtual table.
-    db = AppDatabase.forTesting(NativeDatabase.memory());
-    
+    db = KnowledgeBaseDatabase.forTesting(NativeDatabase.memory());
+
     // We force mock embeddings for unit tests to avoid asset loading and ensure fast execution.
     embeddingService = EmbeddingService(forceMock: true);
     repository = RagRepository(db, embeddingService);
 
-    // Seed some initial data
+    // Seed some initial content data.
     await db.into(db.verses).insert(VersesCompanion.insert(
           id: const drift.Value(1),
           surahNumber: 1,
@@ -28,8 +39,7 @@ void main() {
           juzNumber: 1,
           arabicText: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
           englishText: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
-          banglaText: 'পরম করুণাময় অসীম দয়ালু আল্লাহর নামে শুরু করছি।',
-          hindiText: 'अल्लाह के नाम से, जो अत्यंत कृपाशील और दयावान है।',
+          banglaText: 'পরম করুণাময় অসীম দয়ালু আল্লাহর নামে শুরু করছি।',
         ));
 
     await db.into(db.hadiths).insert(HadithsCompanion.insert(
@@ -39,8 +49,7 @@ void main() {
           chapterTitle: 'Revelation',
           arabicText: 'إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ',
           englishText: 'Actions are but by intention...',
-          banglaText: 'কাজ নিয়তের ওপর নির্ভরশীল...',
-          hindiText: 'कर्मों का दारोमदार नीयत पर है...',
+          banglaText: 'কাজ নিয়তের ওপর নির্ভরশীল...',
         ));
 
     await db.into(db.tafsirs).insert(TafsirsCompanion.insert(
@@ -50,8 +59,12 @@ void main() {
           author: 'Ibn Kathir',
           contentEnglish: 'Tafsir explaining the meaning of Basmalah.',
           contentBangla: 'তাসমীয়ার তাফসীর...',
-          contentHindi: 'बिस्मिल्लाह की तफ़्सीर...',
         ));
+
+    // Precompute and index embeddings, as `tool/build_kb.dart` does offline.
+    await _insertVector(db, 1, await embeddingService.getEmbedding('In the name of Allah, the Entirely Merciful, the Especially Merciful.'));
+    await _insertVector(db, RagRepository.hadithOffset + 1, await embeddingService.getEmbedding('Actions are but by intention...'));
+    await _insertVector(db, RagRepository.tafsirOffset + 1, await embeddingService.getEmbedding('Tafsir explaining the meaning of Basmalah.'));
   });
 
   tearDown(() async {
@@ -59,20 +72,7 @@ void main() {
   });
 
   group('RagRepository Tests', () {
-    test('populateVectorIndex indexes all content', () async {
-      await repository.populateVectorIndex();
-
-      final countResult = await db.customSelect('SELECT count(*) as count FROM vec_knowledge_base').getSingle();
-      final count = countResult.read<int>('count');
-
-      // We seeded 1 verse, 1 hadith, 1 tafsir
-      expect(count, 3);
-    });
-
     test('search returns matching segments ordered by similarity', () async {
-      // Index the database first
-      await repository.populateVectorIndex();
-
       // Search for something related to the verse
       final results = await repository.search('name of Allah', limit: 2);
 

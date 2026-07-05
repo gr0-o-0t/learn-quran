@@ -381,7 +381,22 @@ Expected: all tests pass (this change is additive/backward-compatible — every 
 
 - [ ] **Step 6: Fetch and add the real model assets (manual, one-time)**
 
-These two files are fetched once from verified sources and committed as binary assets (small enough: ~33MB + ~230KB):
+These two files are fetched once from verified sources and committed as binary assets (small enough: ~33MB + ~230KB).
+
+`.gitignore` currently has a blanket `assets/models/*.onnx` rule (originally meant for large LLM weights that are runtime-downloaded, never committed — see `model_download_service.dart`). This new file needs an exception, the same way `assets/databases/quran_base.db` already has one. In `.gitignore`, change:
+
+```
+assets/models/*.onnx
+```
+
+to:
+
+```
+assets/models/*.onnx
+!assets/models/bge_small_en_v1_5.onnx
+```
+
+Then fetch the files:
 
 ```bash
 mkdir -p assets/models
@@ -426,7 +441,7 @@ Expected: `passage length: 384`; a real onnxruntime session loads without throwi
 - [ ] **Step 8: Commit**
 
 ```bash
-git add pubspec.yaml pubspec.lock lib/core/services/embedding_service.dart test/core/services/embedding_service_test.dart assets/models/bge_small_en_v1_5.onnx assets/models/bge_small_en_v1_5_vocab.txt
+git add pubspec.yaml pubspec.lock .gitignore lib/core/services/embedding_service.dart test/core/services/embedding_service_test.dart assets/models/bge_small_en_v1_5.onnx assets/models/bge_small_en_v1_5_vocab.txt
 git commit -m "feat: real BGE-small-en-v1.5 embeddings with a real WordPiece tokenizer"
 ```
 
@@ -639,7 +654,7 @@ class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
 - [ ] **Step 4: Generate Drift code**
 
 Run: `dart run build_runner build --delete-conflicting-outputs`
-Expected: generates `lib/data/local/db/knowledge_base_database.g.dart` with no errors.
+Expected: generates `lib/data/local/db/knowledge_base_database.g.dart` with no errors. This file is gitignored (`.gitignore`'s `*.g.dart` rule) — every CI workflow already runs this same `build_runner build` step itself, so the generated file is never committed. Do not `git add` it in Step 7.
 
 - [ ] **Step 5: Run the test**
 
@@ -654,7 +669,7 @@ Expected: all green — this task only adds a new file, doesn't touch `AppDataba
 - [ ] **Step 7: Commit**
 
 ```bash
-git add lib/data/local/db/knowledge_base_database.dart lib/data/local/db/knowledge_base_database.g.dart test/data/local/db/knowledge_base_database_test.dart
+git add lib/data/local/db/knowledge_base_database.dart test/data/local/db/knowledge_base_database_test.dart
 git commit -m "feat: add KnowledgeBaseDatabase (read-only Quran/Hadith/Tafsir + vectors)"
 ```
 
@@ -696,7 +711,7 @@ Expected: FAIL to compile — file doesn't exist yet.
 
 - [ ] **Step 3: Create the catalog**
 
-Create `lib/core/models/kb_catalog.dart`. **Note:** the exact `sizeBytes` value below is a placeholder that Task 10's final step replaces with the real, observed value after the first `kb-v1.0.0` release is actually built — there is no way to know the true byte count before that release exists (this mirrors exactly how `model_catalog.dart`'s `sizeBytes` values were hardcoded only after directly verifying each real Hugging Face file). Until Task 10 completes, this entry is intentionally unverified and Task 5's `isDownloaded()` exact-size check will simply never match a real download.
+Create `lib/core/models/kb_catalog.dart`. **Note:** the exact `sizeBytes` value below is a placeholder that Task 9's final step replaces with the real, observed value after the first `kb-v1.0.0` release is actually built — there is no way to know the true byte count before that release exists (this mirrors exactly how `model_catalog.dart`'s `sizeBytes` values were hardcoded only after directly verifying each real Hugging Face file). Until Task 9 completes, this entry is intentionally unverified and Task 5's `isDownloaded()` exact-size check will simply never match a real download.
 
 ```dart
 /// A downloadable, versioned knowledge base release.
@@ -718,18 +733,18 @@ class KbInfo {
 /// The current knowledge base version the app knows how to fetch.
 /// sizeBytes is filled in for real once kb-v1.0.0 is actually built and
 /// published (see docs/superpowers/plans/2026-07-05-knowledge-base-v1.md,
-/// Task 10's final step) — do not trust this value until that step is done.
+/// Task 9's final step) — do not trust this value until that step is done.
 const KbInfo kCurrentKb = KbInfo(
   version: '1.0.0',
   filename: 'kb.db',
-  sizeBytes: 0, // TODO(Task 10, final step): replace with the real, verified byte count.
+  sizeBytes: 0, // TODO(Task 9, final step): replace with the real, verified byte count.
 );
 ```
 
 - [ ] **Step 4: Run the test**
 
 Run: `flutter test test/core/models/kb_catalog_test.dart`
-Expected: FAIL — `expect(kCurrentKb.sizeBytes, greaterThan(0))` fails since it's `0` until Task 10.
+Expected: FAIL — `expect(kCurrentKb.sizeBytes, greaterThan(0))` fails since it's `0` until Task 9.
 
 This is expected and correct at this point in the plan — leave a visible marker rather than a fake passing value. Change the test's last assertion temporarily is **not** the fix; instead:
 
@@ -754,11 +769,11 @@ void main() {
       expect(
         kCurrentKb.sizeBytes,
         greaterThan(0),
-        reason: 'Run Task 10 (cut the kb-v1.0.0 release) and hardcode the '
+        reason: 'Run Task 9 (cut the kb-v1.0.0 release) and hardcode the '
             'real byte count here — see kb_catalog.dart\'s TODO.',
       );
     },
-    skip: 'Intentionally skipped until Task 10 publishes a real kb-v1.0.0 release.',
+    skip: 'Intentionally skipped until Task 9 publishes a real kb-v1.0.0 release.',
   );
 }
 ```
@@ -772,7 +787,7 @@ Expected: PASS (1 test), 1 skipped with the reason visible in output.
 
 ```bash
 git add lib/core/models/kb_catalog.dart test/core/models/kb_catalog_test.dart
-git commit -m "feat: add kb_catalog.dart (KbInfo, pending real Task 10 release size)"
+git commit -m "feat: add kb_catalog.dart (KbInfo, pending real Task 9 release size)"
 ```
 
 ---
@@ -785,7 +800,7 @@ git commit -m "feat: add kb_catalog.dart (KbInfo, pending real Task 10 release s
 
 **Interfaces:**
 - Consumes: `KbInfo` from Task 4.
-- Produces (used by Task 9):
+- Produces (used by Task 8):
   - `class KbDownloadService` with `localPathFor(KbInfo)`, `isDownloaded(KbInfo)`, `downloadKb(KbInfo, {onProgress})`, `deleteKb(KbInfo)`, mirroring `ModelDownloadService`'s exact method shapes and semantics (exact-size verification, HTTP Range resume, 30s idle-timeout, `.forTesting()` constructor).
   - `class KbDownloadProgress` — same shape as `DownloadProgress`.
 
@@ -1053,8 +1068,8 @@ git commit -m "feat: add KbDownloadService (mirrors ModelDownloadService for kb.
 - Test: `test/tool/kb_sources_test.dart`
 
 **Interfaces:**
-- Consumes: `KnowledgeBaseDatabase` (Task 3), `EmbeddingService` (Task 2), `RagRepository`-equivalent embedding-insert logic (reused inline, since `RagRepository` itself is bound to whichever content database is passed to it — see Task 8, which retargets it to `KnowledgeBaseDatabase`, making it directly reusable here too).
-- Produces: a runnable `dart run tool/build_kb.dart --output kb.db` command that fetches real content and produces a complete `kb.db`.
+- Consumes: `KnowledgeBaseDatabase` (Task 3), `EmbeddingService` (Task 2), `RagRepository`-equivalent embedding-insert logic (reused inline, since `RagRepository` itself is bound to whichever content database is passed to it — see Task 7, which retargets it to `KnowledgeBaseDatabase`, making it directly reusable here too).
+- Produces: `tool/build_kb.dart` (fetches real content, produces a complete `kb.db`) plus `tool/build_kb_runner.dart` — a permanent harness required because `build_kb.dart` transitively needs Flutter engine bindings (`rootBundle`) that a bare `dart run` never provides. Invoke via `flutter test tool/build_kb_runner.dart --timeout=none --dart-define=KB_OUTPUT=... --dart-define=KB_VERSION=...`, not `dart run`.
 
 - [ ] **Step 1: Write the failing parse-logic tests**
 
@@ -1461,19 +1476,31 @@ git commit -m "feat: add tool/build_kb.dart — fetches real Quran/Hadith/Tafsir
 
 ---
 
-### Task 7: Simplify `AppDatabase` to user data only
+### Task 7: Split `KnowledgeBaseDatabase` out of `AppDatabase`
+
+This is one task, not two — simplifying `AppDatabase` and retargeting
+`QuranRepository`/`RagRepository` are inseparable: neither compiles cleanly
+on its own (removing the tables from `AppDatabase` breaks the repositories
+until they're retargeted; retargeting the repositories requires
+`KnowledgeBaseDatabase` to already be the source of truth). The task ends
+in one clean, fully-green commit.
 
 **Files:**
 - Modify: `lib/data/local/db/app_database.dart`
-- Modify: `test/data/local/db/*` (check for any direct references to `Verses`/`Hadiths`/`Tafsirs` on `AppDatabase` — none are expected per the codebase survey, but verify in Step 1)
+- Modify: `lib/data/repositories/quran_repository.dart`
+- Modify: `lib/data/repositories/rag_repository.dart`
+- Modify: `lib/core/providers/database_provider.dart`
+- Modify: `lib/core/providers/repository_providers.dart`
+- Modify: `test/data/repositories/quran_repository_test.dart` and `test/data/repositories/rag_repository_test.dart`
 
 **Interfaces:**
-- Produces: `AppDatabase` with tables `UserProgress`, `SalatLogs`, `Conversations`, `Messages`, `UserEngagementState` only. `hasVectorExtension` getter and `_createVirtualTable()` logic removed entirely (that lives in `KnowledgeBaseDatabase` now). `_openConnection()` no longer seeds from `quran_base.db`.
+- Consumes: `KnowledgeBaseDatabase` (Task 3), `EmbeddingService.getEmbedding(text, {isQuery})` (Task 2).
+- Produces: `AppDatabase` with tables `UserProgress`, `SalatLogs`, `Conversations`, `Messages`, `UserEngagementState` only. `QuranRepository`/`RagRepository` constructors now take `KnowledgeBaseDatabase` instead of `AppDatabase`. New `knowledgeBaseDatabaseProvider` (Riverpod `Provider<KnowledgeBaseDatabase>`) alongside the existing `appDatabaseProvider` — throws `UnimplementedError` until Task 8 wires it to a real path; that's fine, no unit test constructs repositories through the provider.
 
-- [ ] **Step 1: Confirm no test depends on `AppDatabase.verses`/`.hadiths`/`.tafsirs`**
+- [ ] **Step 1: Confirm no other file depends on `AppDatabase.verses`/`.hadiths`/`.tafsirs`**
 
 Run: `grep -rln "db.verses\|db.hadiths\|db.tafsirs\|\.verses\b\|\.hadiths\b\|\.tafsirs\b" test/ lib/ --include="*.dart" | grep -v knowledge_base`
-Expected: no matches outside `lib/data/repositories/quran_repository.dart` and `lib/data/repositories/rag_repository.dart` (both updated in Task 8) — if anything else appears, stop and account for it before proceeding.
+Expected: no matches outside `lib/data/repositories/quran_repository.dart` and `lib/data/repositories/rag_repository.dart` (both updated later in this task) — if anything else appears, stop and account for it before proceeding.
 
 - [ ] **Step 2: Rewrite `app_database.dart`**
 
@@ -1573,30 +1600,14 @@ LazyDatabase _openConnection() {
 - [ ] **Step 3: Regenerate Drift code**
 
 Run: `dart run build_runner build --delete-conflicting-outputs`
-Expected: regenerates `lib/data/local/db/app_database.g.dart` without `Verses`/`Hadiths`/`Tafsirs`-related code.
+Expected: regenerates `lib/data/local/db/app_database.g.dart` without `Verses`/`Hadiths`/`Tafsirs`-related code. This file is gitignored — do not `git add` it in Step 7.
 
-- [ ] **Step 4: Run the full suite (expect failures — fixed in Task 8)**
+- [ ] **Step 4: Run the full suite — expect failures, this is a checkpoint mid-task, not a stopping point**
 
 Run: `flutter test`
-Expected: FAIL — `lib/data/repositories/quran_repository.dart` and `lib/data/repositories/rag_repository.dart` still reference `_db.verses`/`_db.hadiths`/`_db.tafsirs` on the now-`AppDatabase`-typed `_db`, which no longer has those getters. This is expected; Task 8 fixes it. Do not commit yet.
+Expected: FAIL — `lib/data/repositories/quran_repository.dart` and `lib/data/repositories/rag_repository.dart` still reference `_db.verses`/`_db.hadiths`/`_db.tafsirs` on the now-`AppDatabase`-typed `_db`, which no longer has those getters. Continue to Step 5 — do not commit until Step 10.
 
----
-
-### Task 8: Retarget `QuranRepository` and `RagRepository` to `KnowledgeBaseDatabase`
-
-**Files:**
-- Modify: `lib/data/repositories/quran_repository.dart`
-- Modify: `lib/data/repositories/rag_repository.dart`
-- Modify: `lib/core/providers/database_provider.dart`
-- Modify: `lib/core/providers/repository_providers.dart`
-- Modify: `lib/core/services/embedding_service.dart` (no code change — just confirming the `isQuery` call site, Step 3)
-- Test: existing `test/data/repositories/quran_repository_test.dart` and `test/data/repositories/rag_repository_test.dart` — update their `AppDatabase` setup to `KnowledgeBaseDatabase`
-
-**Interfaces:**
-- Consumes: `KnowledgeBaseDatabase` (Task 3).
-- Produces: `QuranRepository`/`RagRepository` constructors now take `KnowledgeBaseDatabase` instead of `AppDatabase`. New `knowledgeBaseDatabaseProvider` (Riverpod `Provider<KnowledgeBaseDatabase>`) alongside the existing `appDatabaseProvider`.
-
-- [ ] **Step 1: Update `quran_repository.dart`**
+- [ ] **Step 5: Update `quran_repository.dart`**
 
 Replace the full contents of `lib/data/repositories/quran_repository.dart`:
 
@@ -1658,7 +1669,7 @@ class QuranRepository {
 
 (Only the import and the field/constructor type changed — every query is identical, since `KnowledgeBaseDatabase`'s `Verses`/`Hadiths`/`Tafsirs` tables have the same shape minus the dropped Hindi columns, which this repository never referenced anyway.)
 
-- [ ] **Step 2: Update `rag_repository.dart`**
+- [ ] **Step 6: Update `rag_repository.dart`**
 
 In `lib/data/repositories/rag_repository.dart`, change the import and field type:
 
@@ -1714,7 +1725,7 @@ Remove `populateVectorIndex()` entirely and its call site in `search()` — embe
 
 Keep `_buildSearchResult`, `hadithOffset`, `tafsirOffset`, and `_ScoredRow` exactly as they are today — none of those reference `AppDatabase`-specific members.
 
-- [ ] **Step 3: Add `knowledgeBaseDatabaseProvider`**
+- [ ] **Step 7: Add `knowledgeBaseDatabaseProvider`**
 
 In `lib/core/providers/database_provider.dart`, add alongside the existing `appDatabaseProvider`:
 
@@ -1722,16 +1733,16 @@ In `lib/core/providers/database_provider.dart`, add alongside the existing `appD
 import '../../data/local/db/knowledge_base_database.dart';
 
 final knowledgeBaseDatabaseProvider = Provider<KnowledgeBaseDatabase>((ref) {
-  // Task 9 (Settings + KbDownloadService) wires this to the real bundled/
+  // Task 8 (Settings + KbDownloadService) wires this to the real bundled/
   // downloaded kb.db path; until then this throws if constructed directly.
   throw UnimplementedError(
-    'knowledgeBaseDatabaseProvider is wired up in Task 9 — see '
+    'knowledgeBaseDatabaseProvider is wired up in Task 8 — see '
     'docs/superpowers/plans/2026-07-05-knowledge-base-v1.md',
   );
 });
 ```
 
-- [ ] **Step 4: Update `repository_providers.dart`**
+- [ ] **Step 8: Update `repository_providers.dart`**
 
 In `lib/core/providers/repository_providers.dart`, change:
 
@@ -1771,31 +1782,32 @@ final ragRepositoryProvider = Provider<RagRepository>((ref) {
 });
 ```
 
-- [ ] **Step 5: Update `quran_repository_test.dart` and `rag_repository_test.dart`**
+- [ ] **Step 9: Update `quran_repository_test.dart` and `rag_repository_test.dart`**
 
 In both test files, change every `AppDatabase.forTesting(NativeDatabase.memory())` used to construct the repository under test to `KnowledgeBaseDatabase.forTesting(NativeDatabase.memory())`, and update the corresponding import. Update any inserted fixture rows that reference `hindiText`/`HindiText` fields — remove those named arguments (the new tables don't have them). Leave any *other* `AppDatabase` usage in the same test files (if a test also touches `UserProgress`/engagement data) untouched.
 
 Run: `grep -n "hindiText\|HindiText" test/data/repositories/*.dart`
 Fix any matches by deleting that named argument from the relevant `...Companion.insert(...)` call.
 
-- [ ] **Step 6: Run the full suite**
+- [ ] **Step 10: Run the full suite**
 
 Run: `flutter test`
-Expected: all green. `knowledgeBaseDatabaseProvider`'s `UnimplementedError` is never hit by unit tests (they construct `QuranRepository`/`RagRepository` directly with `KnowledgeBaseDatabase.forTesting(...)`, not via the provider) — it will only throw if the app is actually run before Task 9 wires it up for real, which is expected and fine mid-plan.
+Expected: all green. `knowledgeBaseDatabaseProvider`'s `UnimplementedError` is never hit by unit tests (they construct `QuranRepository`/`RagRepository` directly with `KnowledgeBaseDatabase.forTesting(...)`, not via the provider) — it will only throw if the app is actually run before Task 8 wires it up for real, which is expected and fine at this point in the plan.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add lib/data/repositories/quran_repository.dart lib/data/repositories/rag_repository.dart lib/data/local/db/app_database.dart lib/data/local/db/app_database.g.dart lib/core/providers/database_provider.dart lib/core/providers/repository_providers.dart test/data/repositories/quran_repository_test.dart test/data/repositories/rag_repository_test.dart
+git add lib/data/repositories/quran_repository.dart lib/data/repositories/rag_repository.dart lib/data/local/db/app_database.dart lib/core/providers/database_provider.dart lib/core/providers/repository_providers.dart test/data/repositories/quran_repository_test.dart test/data/repositories/rag_repository_test.dart
 git commit -m "refactor: split KnowledgeBaseDatabase out of AppDatabase; drop on-device embedding generation"
 ```
 
 ---
 
-### Task 9: Wire up `kb.db` for real — asset bundling, provider, Settings UI
+### Task 8: Wire up `kb.db` for real — asset bundling, provider, Settings UI
 
 **Files:**
 - Modify: `pubspec.yaml` (asset registration)
+- Modify: `.gitignore` (exempt `kb.db` from the blanket `assets/databases/*.db` rule)
 - Modify: `lib/core/providers/database_provider.dart` (real `knowledgeBaseDatabaseProvider` implementation)
 - Modify: `lib/presentation/screens/settings_screen.dart` (new "Knowledge Base" section)
 - Delete: `assets/databases/quran_base.db` (superseded by `assets/databases/kb.db`)
@@ -1806,11 +1818,24 @@ git commit -m "refactor: split KnowledgeBaseDatabase out of AppDatabase; drop on
 
 - [ ] **Step 1: Place the built `kb.db` as an asset**
 
-This depends on Task 6's tool having produced a real file (Step 6 of Task 6 was a manual smoke-test run — reuse that output, or re-run it):
+This depends on Task 6's tool having produced a real file (Step 6 of Task 6 was a manual smoke-test run — reuse that output, or re-run it). Note: `tool/build_kb.dart` cannot run via bare `dart run` — it transitively uses `rootBundle` (via `EmbeddingService`/`KnowledgeBaseDatabase.openBundled`), which needs Flutter engine bindings (`dart:ui`) that plain `dart run` never provides. Task 6 added `tool/build_kb_runner.dart` specifically to host `build_kb.main()` under `flutter test` for this reason — use it:
 
 ```bash
-dart run tool/build_kb.dart --output assets/databases/kb.db --version 1.0.0
+flutter test tool/build_kb_runner.dart --timeout=none \
+  --dart-define=KB_OUTPUT=assets/databases/kb.db --dart-define=KB_VERSION=1.0.0
 rm assets/databases/quran_base.db
+```
+
+`.gitignore` has `assets/databases/*.db` with only `!assets/databases/quran_base.db` excepted. Since that file no longer exists, replace the exception line:
+
+```
+!assets/databases/quran_base.db
+```
+
+with:
+
+```
+!assets/databases/kb.db
 ```
 
 In `pubspec.yaml`, under `flutter: assets:`, change:
@@ -1827,7 +1852,7 @@ to:
 
 - [ ] **Step 2: Implement `knowledgeBaseDatabaseProvider` for real**
 
-In `lib/core/providers/database_provider.dart`, replace the placeholder from Task 8 Step 3:
+In `lib/core/providers/database_provider.dart`, replace the placeholder from Task 7 Step 7:
 
 ```dart
 import 'package:path_provider/path_provider.dart';
@@ -2027,14 +2052,14 @@ Run: `flutter run -d linux` (or the appropriate local target). Verify:
 - [ ] **Step 8: Commit**
 
 ```bash
-git add pubspec.yaml assets/databases/kb.db lib/core/providers/database_provider.dart lib/core/providers/repository_providers.dart lib/presentation/screens/settings_screen.dart lib/main.dart
+git add pubspec.yaml .gitignore assets/databases/kb.db lib/core/providers/database_provider.dart lib/core/providers/repository_providers.dart lib/presentation/screens/settings_screen.dart lib/main.dart
 git rm assets/databases/quran_base.db
 git commit -m "feat: bundle real kb.db, wire KnowledgeBaseDatabase into the app, add Settings KB section"
 ```
 
 ---
 
-### Task 10: CI release pipeline for `kb-v*` tags
+### Task 9: CI release pipeline for `kb-v*` tags
 
 **Files:**
 - Create: `.github/workflows/build-kb-on-tag.yml`
@@ -2073,12 +2098,22 @@ jobs:
 
       - run: flutter pub get
 
+      - run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#kb-v}" >> "$GITHUB_OUTPUT"
 
       - name: Build kb.db
-        run: dart run tool/build_kb.dart --output kb.db --version "${{ steps.version.outputs.version }}"
+        # `dart run` cannot host this — build_kb.dart transitively uses
+        # rootBundle (via EmbeddingService/KnowledgeBaseDatabase.openBundled),
+        # which needs Flutter engine bindings. tool/build_kb_runner.dart
+        # (added in Task 6) hosts the same, unmodified build_kb.main() under
+        # `flutter test`, which does provide them.
+        run: |
+          flutter test tool/build_kb_runner.dart --timeout=none \
+            --dart-define=KB_OUTPUT=kb.db \
+            --dart-define=KB_VERSION="${{ steps.version.outputs.version }}"
 
       - name: Compute checksum and size
         run: |
@@ -2141,7 +2176,7 @@ In `lib/core/models/kb_catalog.dart`, replace:
 const KbInfo kCurrentKb = KbInfo(
   version: '1.0.0',
   filename: 'kb.db',
-  sizeBytes: 0, // TODO(Task 10, final step): replace with the real, verified byte count.
+  sizeBytes: 0, // TODO(Task 9, final step): replace with the real, verified byte count.
 );
 ```
 
@@ -2179,7 +2214,7 @@ git commit -m "chore: pin real kb-v1.0.0 release size in kb_catalog.dart"
 
 ---
 
-### Task 11: `Tracker.md` entry
+### Task 10: `Tracker.md` entry
 
 **Files:**
 - Modify: `Tracker.md`

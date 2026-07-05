@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/providers/repository_providers.dart';
 import '../../core/theme/quran_data.dart';
-import '../../data/local/db/app_database.dart';
+import '../../data/local/db/knowledge_base_database.dart';
 
 class JuzDetailScreen extends ConsumerStatefulWidget {
   final int juzNumber;

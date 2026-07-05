@@ -35,6 +35,7 @@ dependencies:
 
   # Runtime model downloads
   http: ^1.6.0
+  crypto: ^3.0.7
   # Pinned below 7.1.0: that and later reference NWPath.isUltraConstrained,
   # which only exists in the macOS/iOS 26 SDKs. Our usage (checkConnectivity
   # + ConnectivityResult.wifi) has been stable since well before 7.0.0, so
@@ -47,6 +48,7 @@ dependencies:
   timezone: ^0.11.1
   sqlite_vector: ^1.0.0
   onnxruntime: ^1.4.1
+  bert_tokenizer: ^1.1.1
   ffi: ^2.2.0
 
   # On-device LLM inference (llama.cpp GGUF backend via native-assets hooks —
@@ -63,6 +65,7 @@ dev_dependencies:
   drift_dev: ^2.34.0 # 2.34.1+1 exists but needs analyzer ^13.0.0, which conflicts with riverpod_generator ^4.0.4 (latest, needs analyzer ^12.0.0)
   build_runner: ^2.15.0
   riverpod_generator: ^4.0.4
+  args: ^2.7.0
 
 # We only ever load .gguf models (see model_catalog.dart), never .litertlm —
 # skip bundling the litert_lm native runtime to keep binary size down.
@@ -75,5 +78,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/databases/quran_base.db
     - assets/models/
