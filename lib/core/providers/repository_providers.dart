@@ -8,6 +8,11 @@ import 'embedding_provider.dart';
 import '../services/engagement_service.dart';
 import '../services/daily_story_service.dart';
 import '../services/llm_service.dart';
+import '../services/kb_download_service.dart';
+
+final kbDownloadServiceProvider = Provider<KbDownloadService>((ref) {
+  return KbDownloadService();
+});
 
 final quranRepositoryProvider = Provider<QuranRepository>((ref) {
   return QuranRepository(ref.watch(knowledgeBaseDatabaseProvider));

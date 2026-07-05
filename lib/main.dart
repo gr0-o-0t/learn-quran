@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/background_worker_service.dart';
+import 'core/providers/database_provider.dart';
 import 'core/providers/repository_providers.dart';
 import 'presentation/screens/dashboard_screen.dart';
 import 'presentation/screens/quran_reader_screen.dart';
@@ -11,13 +12,17 @@ import 'presentation/screens/qa_agent_screen.dart';
 import 'presentation/screens/settings_screen.dart';
 import 'presentation/screens/permissions_onboarding_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final knowledgeBaseDatabase = await openKnowledgeBaseDatabase();
   // Best-effort: never let background-alarm setup delay or block app startup.
   unawaited(_scheduleBackgroundPrayerWorker());
   runApp(
-    const ProviderScope(
-      child: LearnQuranApp(),
+    ProviderScope(
+      overrides: [
+        knowledgeBaseDatabaseProvider.overrideWithValue(knowledgeBaseDatabase),
+      ],
+      child: const LearnQuranApp(),
     ),
   );
 }

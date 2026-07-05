@@ -120,7 +120,7 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
             }
           } catch (_) {}
 
-          return {
+          return <String, dynamic>{
             'sender': m.sender,
             'text': m.textContent,
             'citations': citationStr,

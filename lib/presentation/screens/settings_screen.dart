@@ -8,6 +8,8 @@ import '../../core/services/notification_service.dart';
 import '../../core/services/llm_service.dart';
 import '../../core/services/model_download_service.dart';
 import '../../core/models/model_catalog.dart';
+import '../../core/models/kb_catalog.dart';
+import '../../core/providers/database_provider.dart' show knowledgeBaseDatabaseProvider;
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +32,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   String? _downloadingModelId;
   double _downloadProgress = 0.0;
   bool _wifiOnlyDownloads = true;
+  String? _kbVersionInstalled;
+  bool _kbUpdateAvailable = false;
+  bool _kbDownloading = false;
+  double _kbDownloadProgress = 0.0;
 
   @override
   void initState() {
@@ -38,6 +44,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     Future.microtask(() => _loadSettings());
     _checkPermissions();
     _checkModelStatuses();
+    _checkKbStatus();
   }
 
   @override
@@ -96,6 +103,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         _modelDownloaded = statuses;
         _recommendedModelId = recommendedModelFor(ramGb).id;
       });
+    }
+  }
+
+  Future<void> _checkKbStatus() async {
+    final kbDb = ref.read(knowledgeBaseDatabaseProvider);
+    final versionRow = await (kbDb.select(kbDb.kbMeta)..where((t) => t.key.equals('version'))).getSingleOrNull();
+    final kbDownloadService = ref.read(kbDownloadServiceProvider);
+    final newerDownloaded = await kbDownloadService.isDownloaded(kCurrentKb);
+    if (mounted) {
+      setState(() {
+        _kbVersionInstalled = versionRow?.value;
+        _kbUpdateAvailable = !newerDownloaded && versionRow?.value != kCurrentKb.version;
+      });
+    }
+  }
+
+  Future<void> _downloadKbUpdate() async {
+    setState(() {
+      _kbDownloading = true;
+      _kbDownloadProgress = 0.0;
+    });
+    try {
+      await ref.read(kbDownloadServiceProvider).downloadKb(
+        kCurrentKb,
+        onProgress: (progress) {
+          if (mounted) setState(() => _kbDownloadProgress = progress.fraction);
+        },
+      );
+      if (mounted) {
+        setState(() => _kbDownloading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Knowledge base updated. Restart the app to apply it.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _kbDownloading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update knowledge base. Tap Update to retry.')),
+        );
+      }
     }
   }
 
@@ -426,6 +474,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     _updateSetting('wifi_only_model_downloads', val.toString());
                   },
                 ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Knowledge Base
+            _buildSectionCard(
+              theme: theme,
+              title: 'Knowledge Base',
+              icon: Icons.menu_book_rounded,
+              children: [
+                ListTile(
+                  title: Text('Installed version', style: theme.textTheme.bodyMedium),
+                  subtitle: Text(_kbVersionInstalled ?? 'Unknown', style: theme.textTheme.labelLarge),
+                ),
+                if (_kbDownloading)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LinearProgressIndicator(
+                          value: _kbDownloadProgress,
+                          color: AppTheme.emeraldGreen,
+                          backgroundColor: AppTheme.emeraldGreen.withValues(alpha: 0.15),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '${(_kbDownloadProgress * 100).toStringAsFixed(0)}%',
+                            style: theme.textTheme.labelLarge,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (_kbUpdateAvailable)
+                  ListTile(
+                    title: const Text('Update available'),
+                    trailing: TextButton(
+                      onPressed: _downloadKbUpdate,
+                      child: const Text('Update'),
+                    ),
+                  )
+                else
+                  const ListTile(title: Text('Up to date')),
               ],
             ),
             const SizedBox(height: 16),
