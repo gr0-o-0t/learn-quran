@@ -14,6 +14,10 @@ on:
 env:
   FLUTTER_VERSION: "3.44.2"
 
+# Needed by the release job to create a release and upload assets to it.
+permissions:
+  contents: write
+
 jobs:
   android:
     name: Android (APK)
@@ -68,10 +72,12 @@ jobs:
       # do at all). It is not an installable/distributable IPA.
       - run: flutter build ios --release --no-codesign
 
+      - run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app Runner-iOS-unsigned.zip
+
       - uses: actions/upload-artifact@v7
         with:
           name: ios-app-unsigned
-          path: build/ios/iphoneos/Runner.app
+          path: Runner-iOS-unsigned.zip
           if-no-files-found: error
 
   macos:
@@ -96,10 +102,12 @@ jobs:
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
 
+      - run: ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/Runner.app Runner-macOS-unsigned.zip
+
       - uses: actions/upload-artifact@v7
         with:
           name: macos-app-unsigned
-          path: build/macos/Build/Products/Release/Runner.app
+          path: Runner-macOS-unsigned.zip
           if-no-files-found: error
 
   windows:
@@ -118,10 +126,12 @@ jobs:
 
       - run: flutter build windows --release
 
+      - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath learn_quran-windows.zip
+
       - uses: actions/upload-artifact@v7
         with:
           name: windows-app
-          path: build/windows/x64/runner/Release
+          path: learn_quran-windows.zip
           if-no-files-found: error
 
   linux:
@@ -149,8 +159,28 @@ jobs:
 
       - run: flutter build linux --release
 
+      - run: tar -czf learn_quran-linux.tar.gz -C build/linux/x64/release/bundle .
+
       - uses: actions/upload-artifact@v7
         with:
           name: linux-bundle
-          path: build/linux/x64/release/bundle
+          path: learn_quran-linux.tar.gz
           if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [android, ios, macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      # merge-multiple flattens every job's single artifact file into one
+      # directory instead of nesting each under an artifact-name subfolder
+      # — safe here since every artifact above has a distinct filename.
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/*
+          generate_release_notes: true
