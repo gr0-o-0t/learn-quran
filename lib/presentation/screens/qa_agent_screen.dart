@@ -8,6 +8,18 @@ import '../../core/providers/repository_providers.dart';
 import '../../core/services/llm_service.dart';
 import '../../data/repositories/rag_repository.dart';
 import '../../data/local/db/app_database.dart';
+import 'settings_screen.dart';
+
+/// Engagement-value key: once the user dismisses the AI setup prompt (or
+/// finishes it with a model downloaded), this screen stops re-showing it.
+const aiSetupPromptDismissedKey = 'ai_setup_prompt_dismissed';
+
+/// True if the AI setup prompt should be shown instead of the chat UI:
+/// no model is downloaded yet ([modelPath] null) and the user hasn't
+/// already dismissed the prompt ([dismissedFlag] isn't `'true'`).
+bool needsAiSetupPrompt({required String? modelPath, required String? dismissedFlag}) {
+  return modelPath == null && dismissedFlag != 'true';
+}
 
 class QaAgentScreen extends ConsumerStatefulWidget {
   const QaAgentScreen({super.key});
@@ -22,6 +34,8 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
   String? _currentConversationId;
   bool _isGenerating = false;
   List<Map<String, dynamic>> _messages = [];
+  bool _checkingAiSetup = true;
+  bool _needsAiSetup = false;
 
   static const List<String> _suggestedPrompts = [
     'What does the Quran say about kindness to parents?',
@@ -35,7 +49,37 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
   @override
   void initState() {
     super.initState();
+    Future.microtask(() => _checkAiSetup());
     Future.microtask(() => _initChat());
+  }
+
+  Future<void> _checkAiSetup() async {
+    final llmService = ref.read(llmServiceProvider);
+    final userRepo = ref.read(userRepositoryProvider);
+    final modelPath = await llmService.getSelectedModelPath();
+    final dismissed = await userRepo.getEngagementValue(aiSetupPromptDismissedKey);
+    if (mounted) {
+      setState(() {
+        _needsAiSetup = needsAiSetupPrompt(modelPath: modelPath, dismissedFlag: dismissed);
+        _checkingAiSetup = false;
+      });
+    }
+  }
+
+  Future<void> _openAiSetup() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Set Up AI Model')),
+        body: const SettingsScreen(),
+      ),
+    ));
+    await _checkAiSetup();
+  }
+
+  Future<void> _skipAiSetup() async {
+    final userRepo = ref.read(userRepositoryProvider);
+    await userRepo.setEngagementValue(aiSetupPromptDismissedKey, 'true');
+    if (mounted) setState(() => _needsAiSetup = false);
   }
 
   @override
@@ -472,6 +516,16 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (_checkingAiSetup) {
+      return const SafeArea(
+        child: Center(child: CircularProgressIndicator(color: AppTheme.emeraldGreen)),
+      );
+    }
+    if (_needsAiSetup) {
+      return _AiSetupPrompt(onSetUp: _openAiSetup, onSkip: _skipAiSetup);
+    }
+
     return SafeArea(
       child: Column(
         children: [
@@ -637,6 +691,78 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AiSetupPrompt extends StatelessWidget {
+  const _AiSetupPrompt({required this.onSetUp, required this.onSkip});
+
+  final VoidCallback onSetUp;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.smart_toy_rounded,
+              size: 72,
+              color: AppTheme.emeraldGreen,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Set Up Your AI Companion',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.forestGreen,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Download an on-device AI model in Settings so your questions '
+              'get real, private answers grounded in the Quran and Hadith. '
+              'Until then, you\'ll only see limited demo responses.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                color: AppTheme.textMuted,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onSetUp,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.emeraldGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text('Set Up AI Model'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: onSkip,
+              child: const Text(
+                'Skip for now',
+                style: TextStyle(color: AppTheme.textMuted),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
