@@ -1069,7 +1069,7 @@ git commit -m "feat: add KbDownloadService (mirrors ModelDownloadService for kb.
 
 **Interfaces:**
 - Consumes: `KnowledgeBaseDatabase` (Task 3), `EmbeddingService` (Task 2), `RagRepository`-equivalent embedding-insert logic (reused inline, since `RagRepository` itself is bound to whichever content database is passed to it — see Task 7, which retargets it to `KnowledgeBaseDatabase`, making it directly reusable here too).
-- Produces: a runnable `dart run tool/build_kb.dart --output kb.db` command that fetches real content and produces a complete `kb.db`.
+- Produces: `tool/build_kb.dart` (fetches real content, produces a complete `kb.db`) plus `tool/build_kb_runner.dart` — a permanent harness required because `build_kb.dart` transitively needs Flutter engine bindings (`rootBundle`) that a bare `dart run` never provides. Invoke via `flutter test tool/build_kb_runner.dart --timeout=none --dart-define=KB_OUTPUT=... --dart-define=KB_VERSION=...`, not `dart run`.
 
 - [ ] **Step 1: Write the failing parse-logic tests**
 
@@ -1818,10 +1818,11 @@ git commit -m "refactor: split KnowledgeBaseDatabase out of AppDatabase; drop on
 
 - [ ] **Step 1: Place the built `kb.db` as an asset**
 
-This depends on Task 6's tool having produced a real file (Step 6 of Task 6 was a manual smoke-test run — reuse that output, or re-run it):
+This depends on Task 6's tool having produced a real file (Step 6 of Task 6 was a manual smoke-test run — reuse that output, or re-run it). Note: `tool/build_kb.dart` cannot run via bare `dart run` — it transitively uses `rootBundle` (via `EmbeddingService`/`KnowledgeBaseDatabase.openBundled`), which needs Flutter engine bindings (`dart:ui`) that plain `dart run` never provides. Task 6 added `tool/build_kb_runner.dart` specifically to host `build_kb.main()` under `flutter test` for this reason — use it:
 
 ```bash
-dart run tool/build_kb.dart --output assets/databases/kb.db --version 1.0.0
+flutter test tool/build_kb_runner.dart --timeout=none \
+  --dart-define=KB_OUTPUT=assets/databases/kb.db --dart-define=KB_VERSION=1.0.0
 rm assets/databases/quran_base.db
 ```
 
@@ -2104,7 +2105,15 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME#kb-v}" >> "$GITHUB_OUTPUT"
 
       - name: Build kb.db
-        run: dart run tool/build_kb.dart --output kb.db --version "${{ steps.version.outputs.version }}"
+        # `dart run` cannot host this — build_kb.dart transitively uses
+        # rootBundle (via EmbeddingService/KnowledgeBaseDatabase.openBundled),
+        # which needs Flutter engine bindings. tool/build_kb_runner.dart
+        # (added in Task 6) hosts the same, unmodified build_kb.main() under
+        # `flutter test`, which does provide them.
+        run: |
+          flutter test tool/build_kb_runner.dart --timeout=none \
+            --dart-define=KB_OUTPUT=kb.db \
+            --dart-define=KB_VERSION="${{ steps.version.outputs.version }}"
 
       - name: Compute checksum and size
         run: |
