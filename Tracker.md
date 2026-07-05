@@ -155,6 +155,15 @@ This file is updated dynamically to reflect the completion status of all tasks.
     `tool/build_kb.dart`, shipped in a separate, always-read-only
     `KnowledgeBaseDatabase` (`kb.db`), versioned and updatable from Settings
     via a new `KbDownloadService` (mirrors `ModelDownloadService`).
+    Originally designed to ship bundled in the app by default (the design
+    doc still shows this as the initial decision) — reversed after actually
+    trying to push it: `kb.db` is 247MB, and GitHub hard-rejects any
+    git-tracked file over 100MB. Rewrote git history to strip the blob,
+    then pivoted to download-required, exactly like the AI model already
+    works: the app ships with **no** Quran/Hadith/Tafsir content out of the
+    box, `KnowledgeBaseDatabase` opens an empty schema until the user
+    downloads `kb.db` from Settings, and `QuranReaderScreen` shows a setup
+    prompt (mirroring the AI-setup one) until then.
     The real download size for `kb_catalog.dart` is pending confirmation of
     the `kb-v1.0.0` GitHub Actions run.
     Also discovered along the way: `sqlite-vec`/`vec0` (Task 4.1, marked

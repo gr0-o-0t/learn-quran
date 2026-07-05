@@ -1,5 +1,18 @@
 # Knowledge Base v1 (Content + Real Embeddings) — Design
 
+> **Post-implementation update:** the "bundled by default" decision below
+> (and the matching `Rules.md` exception) was reversed after actually
+> trying to push the built `kb.db` — it's 247MB, and GitHub hard-rejects
+> any git-tracked file over 100MB, no exceptions. Git history was rewritten
+> to strip the blob, and the knowledge base is now **download-required**,
+> exactly like the LLM model already works: the app ships with no
+> Quran/Hadith/Tafsir content out of the box; `KnowledgeBaseDatabase` opens
+> an empty schema until the user downloads `kb.db` from Settings, and
+> `QuranReaderScreen` shows a setup prompt (mirroring the AI-setup one)
+> until then. Left the original reasoning below for the record — it was a
+> reasonable call given the "tens of MB, not GBs" size estimate at the
+> time, which turned out to be wrong by an order of magnitude.
+
 ## Problem
 
 Two related, previously-undiscovered gaps:
