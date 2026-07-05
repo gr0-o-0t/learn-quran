@@ -56,7 +56,6 @@ app.*
 
 # Local databases and models (if large)
 assets/databases/*.db
-!assets/databases/kb.db
 assets/models/*.onnx
 !assets/models/bge_small_en_v1_5.onnx
 assets/models/*.bin

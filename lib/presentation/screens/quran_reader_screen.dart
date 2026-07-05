@@ -1,15 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/quran_data.dart';
+import '../../core/providers/repository_providers.dart';
 import 'surah_detail_screen.dart';
 import 'juz_detail_screen.dart';
+import 'settings_screen.dart';
 
-class QuranReaderScreen extends StatelessWidget {
+/// Engagement-value key: once the user dismisses the knowledge-base setup
+/// prompt (or finishes it with the knowledge base downloaded), this screen
+/// stops re-showing it.
+const kbSetupPromptDismissedKey = 'kb_setup_prompt_dismissed';
+
+/// True if the "set up the knowledge base" prompt should be shown instead
+/// of Quran content: the KB has no rows yet (nothing downloaded) and the
+/// user hasn't already dismissed the prompt (dismissedFlag isn't 'true').
+bool needsKbSetupPrompt({required bool hasContent, required String? dismissedFlag}) {
+  return !hasContent && dismissedFlag != 'true';
+}
+
+class QuranReaderScreen extends ConsumerStatefulWidget {
   const QuranReaderScreen({super.key});
 
   @override
+  ConsumerState<QuranReaderScreen> createState() => _QuranReaderScreenState();
+}
+
+class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
+  bool _checkingKbSetup = true;
+  bool _needsKbSetup = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _checkKbSetup());
+  }
+
+  Future<void> _checkKbSetup() async {
+    final quranRepo = ref.read(quranRepositoryProvider);
+    final userRepo = ref.read(userRepositoryProvider);
+    final hasContent = await quranRepo.hasContent();
+    final dismissed = await userRepo.getEngagementValue(kbSetupPromptDismissedKey);
+    if (mounted) {
+      setState(() {
+        _needsKbSetup = needsKbSetupPrompt(hasContent: hasContent, dismissedFlag: dismissed);
+        _checkingKbSetup = false;
+      });
+    }
+  }
+
+  Future<void> _openKbSetup() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Set Up Knowledge Base')),
+        body: const SettingsScreen(),
+      ),
+    ));
+    await _checkKbSetup();
+  }
+
+  Future<void> _skipKbSetup() async {
+    final userRepo = ref.read(userRepositoryProvider);
+    await userRepo.setEngagementValue(kbSetupPromptDismissedKey, 'true');
+    if (mounted) setState(() => _needsKbSetup = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_checkingKbSetup) {
+      return const SafeArea(
+        child: Center(child: CircularProgressIndicator(color: AppTheme.emeraldGreen)),
+      );
+    }
+    if (_needsKbSetup) {
+      return _KbSetupPrompt(onSetUp: _openKbSetup, onSkip: _skipKbSetup);
+    }
+
     return DefaultTabController(
       length: 2,
       child: SafeArea(
@@ -35,6 +102,78 @@ class QuranReaderScreen extends StatelessWidget {
                   _SurahListView(),
                   _JuzListView(),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KbSetupPrompt extends StatelessWidget {
+  const _KbSetupPrompt({required this.onSetUp, required this.onSkip});
+
+  final VoidCallback onSetUp;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.menu_book_rounded,
+              size: 72,
+              color: AppTheme.emeraldGreen,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Set Up Your Knowledge Base',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.forestGreen,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Download the Quran, Hadith, and Tafsir content in Settings '
+              'so you can read and search it here. This is a one-time '
+              'download.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                color: AppTheme.textMuted,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onSetUp,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.emeraldGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text('Set Up Knowledge Base'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: onSkip,
+              child: const Text(
+                'Skip for now',
+                style: TextStyle(color: AppTheme.textMuted),
               ),
             ),
           ],

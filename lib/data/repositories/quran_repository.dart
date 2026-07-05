@@ -10,6 +10,13 @@ class QuranRepository {
     return _db.select(_db.verses).get();
   }
 
+  /// True if the knowledge base has any real content — false for a fresh,
+  /// empty (schema-only) database (nothing downloaded yet).
+  Future<bool> hasContent() async {
+    final result = await _db.customSelect('SELECT count(*) as c FROM verses').getSingle();
+    return result.read<int>('c') > 0;
+  }
+
   Future<List<Verse>> getVersesBySurah(int surahNumber) {
     return (_db.select(_db.verses)
           ..where((t) => t.surahNumber.equals(surahNumber))

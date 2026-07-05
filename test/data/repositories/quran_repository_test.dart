@@ -100,5 +100,18 @@ void main() {
       expect(tafsirList.length, 1);
       expect(tafsirList[0].author, 'Ibn Kathir');
     });
+
+    test('hasContent returns true when verses exist', () async {
+      expect(await repository.hasContent(), isTrue);
+    });
+  });
+
+  group('QuranRepository.hasContent on an empty database', () {
+    test('returns false for a fresh, schema-only database', () async {
+      final emptyDb = KnowledgeBaseDatabase.forTesting(NativeDatabase.memory());
+      final emptyRepo = QuranRepository(emptyDb);
+      expect(await emptyRepo.hasContent(), isFalse);
+      await emptyDb.close();
+    });
   });
 }
