@@ -1,0 +1,70 @@
+name: Build and Publish Knowledge Base
+
+on:
+  push:
+    tags:
+      - "kb-v[0-9]+.[0-9]+.[0-9]+*"
+
+env:
+  FLUTTER_VERSION: "3.44.2"
+
+permissions:
+  contents: write
+
+jobs:
+  build-kb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - run: flutter pub get
+
+      - run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#kb-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build kb.db
+        # `dart run` cannot host this — build_kb.dart transitively uses
+        # rootBundle (via EmbeddingService/KnowledgeBaseDatabase.openBundled),
+        # which needs Flutter engine bindings. tool/build_kb_runner.dart
+        # (added in Task 6) hosts the same, unmodified build_kb.main() under
+        # `flutter test`, which does provide them.
+        run: |
+          flutter test tool/build_kb_runner.dart --timeout=none \
+            --dart-define=KB_OUTPUT=kb.db \
+            --dart-define=KB_VERSION="${{ steps.version.outputs.version }}"
+
+      - name: Compute checksum and size
+        run: |
+          sha256sum kb.db | tee kb.db.sha256
+          stat -c '%s' kb.db | tee kb.db.size
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kb-release
+          path: |
+            kb.db
+            kb.db.sha256
+            kb.db.size
+          if-no-files-found: error
+
+  release:
+    needs: build-kb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: kb-release
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/*
+          generate_release_notes: true
