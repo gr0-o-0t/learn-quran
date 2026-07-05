@@ -2,37 +2,50 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/user_repository.dart';
 import '../providers/repository_providers.dart';
+import '../models/model_catalog.dart';
 import 'llama_ffi.dart';
+import 'model_download_service.dart';
 
 class LlmService {
   final UserRepository? _userRepo;
+  final ModelDownloadService _downloadService;
   bool _initialized = false;
   bool _useMock = true;
   LlamaFfi? _ffi;
 
-  LlmService([this._userRepo]);
+  LlmService([this._userRepo, ModelDownloadService? downloadService])
+      : _downloadService = downloadService ?? ModelDownloadService();
 
-  Future<String> getSelectedModelPath() async {
-    if (_userRepo != null) {
-      final selectedModel = await _userRepo.getEngagementValue('selected_llm_model');
-      if (selectedModel == 'e2b') {
-        return 'assets/models/gemma_4_e2b.gguf';
-      } else if (selectedModel == 'e4b') {
-        return 'assets/models/gemma_4_e4b.gguf';
-      }
+  /// Resolves the user's selected model (or the RAM-based recommendation if
+  /// nothing's been explicitly selected), then returns its local file path
+  /// if it's actually downloaded — or null if it isn't, so callers can fall
+  /// back to mock/no-model behavior rather than trying to load a
+  /// nonexistent file.
+  Future<String?> getSelectedModelPath() async {
+    final model = await _resolveSelectedModel();
+    if (await _downloadService.isDownloaded(model)) {
+      return _downloadService.localPathFor(model);
     }
-
-    final ramGb = _detectDeviceRamGb();
-    if (ramGb >= 6.0) {
-      return 'assets/models/gemma_4_e4b.gguf';
-    } else {
-      return 'assets/models/gemma_4_e2b.gguf';
-    }
+    return null;
   }
 
-  double _detectDeviceRamGb() {
+  Future<ModelInfo> _resolveSelectedModel() async {
+    if (_userRepo != null) {
+      final selectedId = await _userRepo.getEngagementValue('selected_llm_model');
+      if (selectedId != null) {
+        return modelById(selectedId);
+      }
+    }
+    return recommendedModelFor(detectDeviceRamGb());
+  }
+
+  /// Reads total device RAM from `/proc/meminfo`, which is world-readable
+  /// on both desktop Linux and Android (both are Linux-kernel-based) —
+  /// no platform-specific plugin or permission needed. Falls back to a
+  /// conservative 4.0GB estimate on any other platform or read failure.
+  double detectDeviceRamGb() {
     try {
-      if (Platform.isLinux) {
+      if (Platform.isLinux || Platform.isAndroid) {
         final meminfo = File('/proc/meminfo');
         if (meminfo.existsSync()) {
           final lines = meminfo.readAsLinesSync();
