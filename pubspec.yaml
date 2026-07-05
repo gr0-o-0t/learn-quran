@@ -35,7 +35,12 @@ dependencies:
 
   # Runtime model downloads
   http: ^1.6.0
-  connectivity_plus: ^7.2.0
+  # Pinned below 7.1.0: that and later reference NWPath.isUltraConstrained,
+  # which only exists in the macOS/iOS 26 SDKs. Our usage (checkConnectivity
+  # + ConnectivityResult.wifi) has been stable since well before 7.0.0, so
+  # there's no functionality cost, and it lets iOS/macOS CI build with
+  # whatever Xcode the runner ships by default.
+  connectivity_plus: 7.0.0
 
   # Cupertino Icons
   cupertino_icons: ^1.0.9

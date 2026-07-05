@@ -73,20 +73,16 @@ jobs:
 
   ios:
     name: iOS (unsigned .app)
-    runs-on: macos-latest
+    # Pinned rather than macos-latest: it's due to migrate to a new
+    # default Xcode/macOS mid-2026 (github.com/actions/runner-images#14167),
+    # and switching Xcode versions mid-job to chase a pubspec dependency's
+    # SDK requirement (see the connectivity_plus pin in pubspec.yaml) proved
+    # flaky here — CoreSimulatorService intermittently failed to resolve an
+    # iOS Simulator destination after a `xcode-select -s` mid-job. Staying
+    # on the runner's own default Xcode avoids that entirely.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
-
-      # connectivity_plus (>=7.1.0) references NWPath.isUltraConstrained,
-      # declared only in the macOS/iOS 26 SDKs — the runner's default
-      # Xcode (16.4) predates it. Xcode 26.1.1 is connectivity_plus's own
-      # documented minimum and is preinstalled on the runner image, but
-      # its Simulator runtime isn't registered for a non-default Xcode
-      # until -runFirstLaunch runs, otherwise `--simulator` builds fail to
-      # resolve a destination.
-      - run: |
-          sudo xcode-select -s /Applications/Xcode_26.1.1.app
-          sudo xcodebuild -runFirstLaunch
 
       - uses: actions/cache@v4
         with:
@@ -140,14 +136,10 @@ jobs:
 
   macos:
     name: macOS (.app)
-    runs-on: macos-latest
+    # See the iOS job above for why this is pinned instead of macos-latest.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
-
-      # See the iOS job above: connectivity_plus needs the macOS 26 SDK.
-      - run: |
-          sudo xcode-select -s /Applications/Xcode_26.1.1.app
-          sudo xcodebuild -runFirstLaunch
 
       - uses: actions/cache@v4
         with:
