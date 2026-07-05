@@ -464,7 +464,8 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
         
         if (title.isNotEmpty) {
           citationsList.add({'title': title});
-          contextBuffer.write('$textContent ');
+          // Label included so the model can cite its source per Rules.md.
+          contextBuffer.writeln('[$title] $textContent');
         }
       }
 

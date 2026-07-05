@@ -1,31 +1,32 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:llamadart/llamadart.dart';
 import '../../data/repositories/user_repository.dart';
 import '../providers/repository_providers.dart';
 import '../models/model_catalog.dart';
-import 'llama_ffi.dart';
 import 'model_download_service.dart';
 
 class LlmService {
   final UserRepository? _userRepo;
   final ModelDownloadService _downloadService;
-  bool _initialized = false;
-  bool _useMock = true;
-  LlamaFfi? _ffi;
+  LlamaEngine? _engine;
+  String? _loadedModelPath;
 
   LlmService([this._userRepo, ModelDownloadService? downloadService])
       : _downloadService = downloadService ?? ModelDownloadService();
 
   /// Resolves the user's selected model (or the RAM-based recommendation if
   /// nothing's been explicitly selected), then returns its local file path
-  /// if it's actually downloaded — or null if it isn't, so callers can fall
-  /// back to mock/no-model behavior rather than trying to load a
-  /// nonexistent file.
+  /// if it's actually downloaded — or null if it isn't (or if resolving that
+  /// even fails, e.g. no platform plugin binding available), so callers
+  /// always have a safe mock/no-model fallback rather than crashing.
   Future<String?> getSelectedModelPath() async {
-    final model = await _resolveSelectedModel();
-    if (await _downloadService.isDownloaded(model)) {
-      return _downloadService.localPathFor(model);
-    }
+    try {
+      final model = await _resolveSelectedModel();
+      if (await _downloadService.isDownloaded(model)) {
+        return _downloadService.localPathFor(model);
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -64,31 +65,47 @@ class LlmService {
     return 4.0; // Default fallback
   }
 
-  Future<void> init() async {
-    if (_initialized) return;
-
-    try {
-      final libraryPath = Platform.isLinux
-          ? 'libllama.so'
-          : Platform.isAndroid
-              ? 'libllama.so'
-              : 'llama.framework/llama';
-      
-      // Try to load FFI. In testing environment or devices without dynamic library compiled,
-      // this will throw an exception, triggering the mock fallback.
-      _ffi = LlamaFfi(libraryPath);
-      _useMock = false;
-    } catch (_) {
-      _useMock = true;
+  /// Loads (or reuses an already-loaded) llama.cpp engine for [modelPath].
+  /// Returns null if loading fails for any reason (corrupt file, OOM,
+  /// unsupported quantization, ...), so callers fall back to mock responses
+  /// instead of crashing the whole Q&A flow.
+  Future<LlamaEngine?> _ensureEngine(String modelPath) async {
+    if (_engine != null && _loadedModelPath == modelPath) {
+      return _engine;
     }
 
-    _initialized = true;
+    if (_engine != null) {
+      await _engine!.dispose();
+      _engine = null;
+      _loadedModelPath = null;
+    }
+
+    try {
+      final engine = LlamaEngine(LlamaBackend());
+      await engine.loadModel(modelPath, modelParams: const ModelParams(contextSize: 4096));
+      _engine = engine;
+      _loadedModelPath = modelPath;
+      return engine;
+    } catch (_) {
+      _engine = null;
+      _loadedModelPath = null;
+      return null;
+    }
+  }
+
+  /// Releases the loaded model's native resources. Call when the owning
+  /// provider is disposed (app teardown / hot restart).
+  Future<void> dispose() async {
+    await _engine?.dispose();
+    _engine = null;
+    _loadedModelPath = null;
   }
 
   Stream<String> generateResponseStream(String prompt, String ragContext) async* {
-    await init();
+    final modelPath = await getSelectedModelPath();
+    final engine = modelPath == null ? null : await _ensureEngine(modelPath);
 
-    if (_useMock || _ffi == null) {
+    if (engine == null) {
       final responseText = _generateMockResponse(prompt, ragContext);
       final words = responseText.split(' ');
       for (final word in words) {
@@ -98,8 +115,54 @@ class LlmService {
       return;
     }
 
-    // In a real application, we would call llama.cpp native inference loop here
-    yield 'On-Device Inference Mode: Loaded via FFI.';
+    final messages = [
+      LlamaChatMessage.fromText(role: LlamaChatRole.system, text: _systemPrompt(ragContext)),
+      LlamaChatMessage.fromText(role: LlamaChatRole.user, text: prompt),
+    ];
+
+    final responseStream = engine.create(
+      messages,
+      params: const GenerationParams(maxTokens: 512, temp: 0.7, topP: 0.9),
+    );
+
+    await for (final chunk in responseStream) {
+      final text = chunk.choices.isNotEmpty ? chunk.choices.first.delta.content : null;
+      if (text != null && text.isNotEmpty) {
+        yield text;
+      }
+    }
+  }
+
+  /// Encodes Rules.md's theological/AI generation rules (Sunnah Teaching
+  /// Methodology, Zero-Hallucination Policy, Citations Required) as a system
+  /// prompt for real on-device inference — the mock path already hardcodes
+  /// this tone, so this keeps behavior consistent once a real model answers.
+  String _systemPrompt(String ragContext) {
+    final buffer = StringBuffer()
+      ..writeln(
+        'You are a gentle, respectful Islamic teaching companion for the Learn Quran app.',
+      )
+      ..writeln(
+        'Always respond with warmth and clarity, in the manner of the Sunnah — '
+        'never harsh, condescending, or clinical.',
+      )
+      ..writeln(
+        'Base your answer only on the reference material below. If it does not '
+        'contain enough information to answer, politely say you do not have '
+        'enough information from your local sources rather than guessing.',
+      )
+      ..writeln(
+        'When you use a verse or hadith from the material, cite it using the '
+        'label given in brackets before it, for example "[Surah Al-Baqarah 2:153]".',
+      );
+
+    if (ragContext.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('Reference material:')
+        ..writeln(ragContext);
+    }
+    return buffer.toString();
   }
 
   String _generateMockResponse(String prompt, String ragContext) {
@@ -148,5 +211,7 @@ class LlmService {
 
 final llmServiceProvider = Provider<LlmService>((ref) {
   final userRepo = ref.watch(userRepositoryProvider);
-  return LlmService(userRepo);
+  final service = LlmService(userRepo);
+  ref.onDispose(() => service.dispose());
+  return service;
 });

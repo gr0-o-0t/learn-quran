@@ -41,6 +41,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.1.0"
+  archive:
+    dependency: transitive
+    description:
+      name: archive
+      sha256: a96e8b390886ee8abb49b7bd3ac8df6f451c621619f52a26e815fdcf568959ff
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.9"
   args:
     dependency: transitive
     description:
@@ -305,6 +313,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.13"
+  dinja:
+    dependency: transitive
+    description:
+      name: dinja
+      sha256: "34d4e569ceb3d900ab061f16cae947223968cc63d2484a8a4710d5ecfa4ae3a2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   drift:
     dependency: "direct main"
     description:
@@ -640,6 +656,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  llamadart:
+    dependency: "direct main"
+    description:
+      name: llamadart
+      sha256: "9a04f212b7f7e9e838facb0f5451b13f5819019aff2dfcea28fdbeaba212b2da"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.8.12"
+  llamadart_llama_cpp_flutter:
+    dependency: "direct main"
+    description:
+      name: llamadart_llama_cpp_flutter
+      sha256: "03046ef68a2bccc7a078f3e2be3d1b45fa1db8645a708efefe5ea24eb30c7b85"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.8"
   logging:
     dependency: transitive
     description:
@@ -840,6 +872,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.2"
+  posix:
+    dependency: transitive
+    description:
+      name: posix
+      sha256: "185ef7606574f789b40f289c233efa52e96dead518aed988e040a10737febb07"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.5.0"
   pub_semver:
     dependency: transitive
     description:

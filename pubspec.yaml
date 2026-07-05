@@ -49,6 +49,13 @@ dependencies:
   onnxruntime: ^1.4.1
   ffi: ^2.2.0
 
+  # On-device LLM inference (llama.cpp GGUF backend via native-assets hooks —
+  # fetches prebuilt runtimes per platform automatically, no manual C++ build)
+  llamadart: ^0.8.12
+  # Lets Flutter iOS/macOS builds link the llama.cpp XCFramework via SwiftPM
+  # instead of native-assets there; llamadart uses this automatically when present.
+  llamadart_llama_cpp_flutter: ^0.0.8
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -56,6 +63,13 @@ dev_dependencies:
   drift_dev: ^2.34.0 # 2.34.1+1 exists but needs analyzer ^13.0.0, which conflicts with riverpod_generator ^4.0.4 (latest, needs analyzer ^12.0.0)
   build_runner: ^2.15.0
   riverpod_generator: ^4.0.4
+
+# We only ever load .gguf models (see model_catalog.dart), never .litertlm —
+# skip bundling the litert_lm native runtime to keep binary size down.
+hooks:
+  user_defines:
+    llamadart:
+      llamadart_native_runtimes: [llama_cpp]
 
 flutter:
   uses-material-design: true
