@@ -64,6 +64,7 @@ dev_dependencies:
   drift_dev: ^2.34.0 # 2.34.1+1 exists but needs analyzer ^13.0.0, which conflicts with riverpod_generator ^4.0.4 (latest, needs analyzer ^12.0.0)
   build_runner: ^2.15.0
   riverpod_generator: ^4.0.4
+  args: ^2.7.0
 
 # We only ever load .gguf models (see model_catalog.dart), never .litertlm —
 # skip bundling the litert_lm native runtime to keep binary size down.
