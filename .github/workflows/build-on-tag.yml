@@ -128,7 +128,7 @@ jobs:
       - run: flutter build ios --debug --no-codesign --simulator
 
       - run: |
-          APP_PATH=$(find build/ios -maxdepth 4 -name "Runner.app" -type d | head -n1)
+          APP_PATH=$(find build/ios -maxdepth 4 -name "*.app" -type d | head -n1)
           test -n "$APP_PATH"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" Runner-iOS-simulator-unsigned.zip
 
@@ -184,7 +184,7 @@ jobs:
           CODE_SIGNING_REQUIRED: "NO"
 
       - run: |
-          APP_PATH=$(find build/macos -maxdepth 6 -name "Runner.app" -type d | head -n1)
+          APP_PATH=$(find build/macos -maxdepth 6 -name "*.app" -type d | head -n1)
           test -n "$APP_PATH"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" Runner-macOS-unsigned.zip
 

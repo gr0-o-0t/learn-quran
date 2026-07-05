@@ -49,8 +49,6 @@ app.*
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/Runner/GeneratedPluginRegistrant.h
 **/ios/Runner/GeneratedPluginRegistrant.m
-**/ios/Runner/Info.plist
-**/ios/Runner/Assets.xcassets/AppIcon.appiconset/
 **/ios/Flash/
 
 # Local databases and models (if large)
