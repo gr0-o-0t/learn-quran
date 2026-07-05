@@ -7,6 +7,13 @@ class ModelInfo {
   final String filename;
   final int sizeBytes;
 
+  /// The exact commit this model's URL is pinned to, so the file's size
+  /// and content can never silently change out from under an already-
+  /// downloaded exact-size match — unlike resolving against a mutable
+  /// branch like `main`, where an upstream re-upload would permanently
+  /// break isDownloaded's exact-size check with no visible error.
+  final String revision;
+
   /// If non-null, this model becomes the recommendation once the device's
   /// detected RAM meets or exceeds this many GB. The catalog entry with a
   /// null threshold is the default/fallback recommendation.
@@ -19,11 +26,12 @@ class ModelInfo {
     required this.huggingFaceRepo,
     required this.filename,
     required this.sizeBytes,
+    required this.revision,
     this.recommendedAboveRamGb,
   });
 
   String get downloadUrl =>
-      'https://huggingface.co/$huggingFaceRepo/resolve/main/$filename';
+      'https://huggingface.co/$huggingFaceRepo/resolve/$revision/$filename';
 }
 
 /// The fixed, curated set of models users can download. Sizes verified
@@ -38,6 +46,7 @@ const List<ModelInfo> kModelCatalog = [
     description: 'Recommended for devices with <6GB RAM',
     huggingFaceRepo: 'unsloth/gemma-4-E2B-it-GGUF',
     filename: 'gemma-4-E2B-it-Q4_K_M.gguf',
+    revision: 'ecc8b33b2c50598815e4b0f7cea6088e3ae7adb8',
     sizeBytes: 3106736256,
   ),
   ModelInfo(
@@ -46,6 +55,7 @@ const List<ModelInfo> kModelCatalog = [
     description: 'Recommended for devices with ≥6GB RAM',
     huggingFaceRepo: 'unsloth/gemma-4-E4B-it-GGUF',
     filename: 'gemma-4-E4B-it-Q4_K_M.gguf',
+    revision: 'e1d90e5fb9f61d8dc71ef016580784a054e5c787',
     sizeBytes: 4977169568,
     recommendedAboveRamGb: 6.0,
   ),

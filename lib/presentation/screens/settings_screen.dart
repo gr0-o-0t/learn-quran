@@ -224,6 +224,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             color: AppTheme.emeraldGreen,
           ),
         ),
+        trailing: TextButton(
+          onPressed: () {
+            ref.read(modelDownloadServiceProvider).cancelDownload();
+          },
+          child: const Text('Cancel'),
+        ),
       );
     }
 

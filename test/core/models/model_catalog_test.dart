@@ -12,7 +12,7 @@ void main() {
       final e2b = modelById('e2b');
       expect(
         e2b.downloadUrl,
-        'https://huggingface.co/${e2b.huggingFaceRepo}/resolve/main/${e2b.filename}',
+        'https://huggingface.co/${e2b.huggingFaceRepo}/resolve/${e2b.revision}/${e2b.filename}',
       );
     });
 

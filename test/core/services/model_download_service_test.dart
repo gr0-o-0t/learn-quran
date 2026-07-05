@@ -11,6 +11,7 @@ const _testModel = ModelInfo(
   description: 'A tiny fixture, not a real model',
   huggingFaceRepo: 'test/repo',
   filename: 'test-model.gguf',
+  revision: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
   sizeBytes: 20,
 );
 
