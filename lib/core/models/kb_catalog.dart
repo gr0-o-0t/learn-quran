@@ -11,15 +11,14 @@ class KbInfo {
   });
 
   String get downloadUrl =>
-      'https://github.com/REPLACE_WITH_ORG/learn-quran/releases/download/kb-v$version/$filename';
+      'https://github.com/gr0-o-0t/learn-quran/releases/download/kb-v$version/$filename';
 }
 
 /// The current knowledge base version the app knows how to fetch.
-/// sizeBytes is filled in for real once kb-v1.0.0 is actually built and
-/// published (see docs/superpowers/plans/2026-07-05-knowledge-base-v1.md,
-/// Task 9's final step) — do not trust this value until that step is done.
+/// Verified against the real kb-v1.0.0 GitHub Release (2026-07-05):
+/// size 259764224 bytes, sha256 afa19d6e5cf0b8c1d52eb4987f02ea5a3de36c184980fa82cf0e770eea9272e5.
 const KbInfo kCurrentKb = KbInfo(
   version: '1.0.0',
   filename: 'kb.db',
-  sizeBytes: 0, // TODO(Task 9, final step): replace with the real, verified byte count.
+  sizeBytes: 259764224,
 );

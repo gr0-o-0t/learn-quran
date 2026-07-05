@@ -8,16 +8,7 @@ void main() {
     expect(kCurrentKb.downloadUrl, endsWith(kCurrentKb.filename));
   });
 
-  test(
-    'kCurrentKb.sizeBytes is filled in with the real published size',
-    () {
-      expect(
-        kCurrentKb.sizeBytes,
-        greaterThan(0),
-        reason: 'Run Task 9 (cut the kb-v1.0.0 release) and hardcode the '
-            'real byte count here — see kb_catalog.dart\'s TODO.',
-      );
-    },
-    skip: 'Intentionally skipped until Task 9 publishes a real kb-v1.0.0 release.',
-  );
+  test('kCurrentKb.sizeBytes is filled in with the real published size', () {
+    expect(kCurrentKb.sizeBytes, 259764224);
+  });
 }
