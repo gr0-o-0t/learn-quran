@@ -101,7 +101,16 @@ Future<int> _fetchAndInsertHadithBook(
   );
 
   var id = startId;
+  var skipped = 0;
   for (var i = 0; i < english.length; i++) {
+    // A handful of hadith numbers have no English translation in the
+    // upstream fawazahmed0/hadith-api source itself (confirmed genuine gap,
+    // not a fetch/parse bug). Shipping a blank englishText would be useless
+    // for reading and for the RAG index, so skip rather than insert it.
+    if (english[i].text.trim().isEmpty) {
+      skipped++;
+      continue;
+    }
     await db.into(db.hadiths).insert(HadithsCompanion.insert(
           id: Value(id),
           bookName: bookName,
@@ -112,6 +121,9 @@ Future<int> _fetchAndInsertHadithBook(
           banglaText: i < bangla.length ? bangla[i].text : '',
         ));
     id++;
+  }
+  if (skipped > 0) {
+    stdout.writeln('  $bookName: skipped $skipped/${english.length} hadiths with no English text');
   }
   return id;
 }
