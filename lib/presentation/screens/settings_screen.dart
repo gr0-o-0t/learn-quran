@@ -229,6 +229,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               LinearProgressIndicator(
                 value: _downloadProgress,
                 color: AppTheme.emeraldGreen,
+                // Explicit track color: the theme's ColorScheme only sets
+                // `secondary`, so Material3's default track color
+                // (colorScheme.secondaryContainer) silently falls back to
+                // `secondary` too — the same emeraldGreen as the fill above
+                // — making the bar look permanently full at any value.
+                backgroundColor: AppTheme.emeraldGreen.withValues(alpha: 0.15),
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 4),
