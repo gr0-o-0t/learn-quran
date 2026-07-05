@@ -25,6 +25,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # pubspec.yaml's `version:` field never changes (it's always
+      # 1.0.0+1), so without this every tagged build embeds the exact same
+      # Android versionCode/versionName — the package installer then
+      # refuses to install a "new" APK over an existing one because it
+      # isn't a higher version. build-number must strictly increase across
+      # releases; run_number (unique and ever-incrementing per workflow)
+      # guarantees that regardless of what the tag itself says.
+      - name: Compute app version
+        id: version
+        shell: bash
+        run: |
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -69,7 +83,10 @@ jobs:
       # libraries — smaller downloads for direct-APK distribution (this
       # release job, not Play Store, which already does its own splitting
       # from an AAB).
-      - run: flutter build apk --release --split-per-abi
+      - run: |
+          flutter build apk --release --split-per-abi \
+            --build-name=${{ steps.version.outputs.name }} \
+            --build-number=${{ steps.version.outputs.number }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -89,6 +106,14 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
+
+      # See the same step in the android job for why this is needed.
+      - name: Compute app version
+        id: version
+        shell: bash
+        run: |
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v5
         with:
@@ -134,7 +159,9 @@ jobs:
       # this runner — a transient network blip, not something in this repo.
       - run: |
           for attempt in 1 2 3; do
-            flutter build ios --debug --no-codesign --simulator && break
+            flutter build ios --debug --no-codesign --simulator \
+              --build-name=${{ steps.version.outputs.name }} \
+              --build-number=${{ steps.version.outputs.number }} && break
             [ "$attempt" -eq 3 ] && exit 1
             echo "flutter build ios failed (attempt $attempt/3), retrying..."
             sleep 10
@@ -157,6 +184,14 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
+
+      # See the same step in the android job for why this is needed.
+      - name: Compute app version
+        id: version
+        shell: bash
+        run: |
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v5
         with:
@@ -192,7 +227,9 @@ jobs:
       # phases).
       - run: |
           for attempt in 1 2 3; do
-            flutter build macos --release && break
+            flutter build macos --release \
+              --build-name=${{ steps.version.outputs.name }} \
+              --build-number=${{ steps.version.outputs.number }} && break
             [ "$attempt" -eq 3 ] && exit 1
             echo "flutter build macos failed (attempt $attempt/3), retrying..."
             sleep 10
@@ -218,6 +255,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # See the same step in the android job for why this is needed.
+      - name: Compute app version
+        id: version
+        shell: bash
+        run: |
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/cache@v5
         with:
           path: ~/AppData/Local/Pub/Cache
@@ -237,7 +282,10 @@ jobs:
       # gitignored — generate them here, same as local dev.
       - run: dart run build_runner build --delete-conflicting-outputs
 
-      - run: flutter build windows --release
+      - run: >-
+          flutter build windows --release
+          --build-name=${{ steps.version.outputs.name }}
+          --build-number=${{ steps.version.outputs.number }}
 
       - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath learn_quran-windows.zip
 
@@ -252,6 +300,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      # See the same step in the android job for why this is needed.
+      - name: Compute app version
+        id: version
+        shell: bash
+        run: |
+          echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       # Matches the toolchain installed by hand for this same build in the
       # project's dev sandbox: clang/ninja/pkg-config for the CMake-based
@@ -285,7 +341,10 @@ jobs:
       # gitignored — generate them here, same as local dev.
       - run: dart run build_runner build --delete-conflicting-outputs
 
-      - run: flutter build linux --release
+      - run: |
+          flutter build linux --release \
+            --build-name=${{ steps.version.outputs.name }} \
+            --build-number=${{ steps.version.outputs.number }}
 
       - run: tar -czf learn_quran-linux.tar.gz -C build/linux/x64/release/bundle .
 
