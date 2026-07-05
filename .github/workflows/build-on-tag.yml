@@ -127,7 +127,18 @@ jobs:
       # all. It is not an installable/distributable on-device IPA.
       # Flutter only supports debug builds for the simulator target
       # (release/profile require a real device toolchain).
-      - run: flutter build ios --debug --no-codesign --simulator
+      #
+      # Retried: the sqlite3 package's native-assets build hook downloads a
+      # precompiled binary from github.com as part of Xcode's build phases,
+      # and that fetch has intermittently failed with a DNS lookup error on
+      # this runner — a transient network blip, not something in this repo.
+      - run: |
+          for attempt in 1 2 3; do
+            flutter build ios --debug --no-codesign --simulator && break
+            [ "$attempt" -eq 3 ] && exit 1
+            echo "flutter build ios failed (attempt $attempt/3), retrying..."
+            sleep 10
+          done
 
       - run: |
           APP_PATH=$(find build/ios -maxdepth 4 -name "*.app" -type d | head -n1)
@@ -176,7 +187,16 @@ jobs:
       # Same signing caveat as iOS: no Developer ID certificate configured,
       # so codesigning is disabled and the .app is unsigned/build-verification
       # only, not notarization-ready for distribution outside this CI run.
-      - run: flutter build macos --release
+      # Retried for the same reason as the iOS job above (transient DNS
+      # failure fetching sqlite3's native-assets binary during Xcode build
+      # phases).
+      - run: |
+          for attempt in 1 2 3; do
+            flutter build macos --release && break
+            [ "$attempt" -eq 3 ] && exit 1
+            echo "flutter build macos failed (attempt $attempt/3), retrying..."
+            sleep 10
+          done
         env:
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
