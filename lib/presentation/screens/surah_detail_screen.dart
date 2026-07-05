@@ -76,7 +76,7 @@ class _SurahDetailScreenState extends ConsumerState<SurahDetailScreen> {
                                 height: 4,
                                 margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.textMuted.withOpacity(0.3),
+                                  color: AppTheme.textMuted.withValues(alpha: 0.3),
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
@@ -157,7 +157,7 @@ class _SurahDetailScreenState extends ConsumerState<SurahDetailScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.menu_book_rounded,
-                      size: 64, color: AppTheme.textMuted.withOpacity(0.3)),
+                      size: 64, color: AppTheme.textMuted.withValues(alpha: 0.3)),
                   const SizedBox(height: 16),
                   Text(
                     'No verses found in database',
@@ -205,7 +205,7 @@ class _SurahDetailScreenState extends ConsumerState<SurahDetailScreen> {
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: AppTheme.accentGold.withOpacity(0.15),
+                                color: AppTheme.accentGold.withValues(alpha: 0.15),
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
@@ -266,7 +266,7 @@ class _SurahDetailScreenState extends ConsumerState<SurahDetailScreen> {
                         const SizedBox(height: 16),
                         // Divider
                         Divider(
-                          color: AppTheme.textMuted.withOpacity(0.15),
+                          color: AppTheme.textMuted.withValues(alpha: 0.15),
                           height: 1,
                         ),
                         const SizedBox(height: 12),

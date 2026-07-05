@@ -86,50 +86,50 @@ class LlmService {
     }
 
     // In a real application, we would call llama.cpp native inference loop here
-    yield "On-Device Inference Mode: Loaded via FFI.";
+    yield 'On-Device Inference Mode: Loaded via FFI.';
   }
 
   String _generateMockResponse(String prompt, String ragContext) {
     final lowercasePrompt = prompt.toLowerCase();
 
     if (lowercasePrompt.contains('reflection') || lowercasePrompt.contains('story')) {
-      return "Title: Finding Calm in Patience\n\n"
-             "As-Salamu Alaykum. In the journey of life, we often face moments of doubt and tiredness. "
-             "However, every verse you read and every Salat you pray brings you closer to divine light. "
-             "Remember, patience is a source of strength, and your consistency is beautiful to the Almighty. "
-             "Keep moving forward with a peaceful heart, knowing that with every difficulty comes ease.";
+      return 'Title: Finding Calm in Patience\n\n'
+             'As-Salamu Alaykum. In the journey of life, we often face moments of doubt and tiredness. '
+             'However, every verse you read and every Salat you pray brings you closer to divine light. '
+             'Remember, patience is a source of strength, and your consistency is beautiful to the Almighty. '
+             'Keep moving forward with a peaceful heart, knowing that with every difficulty comes ease.';
     }
 
     if (lowercasePrompt.contains('patience') || lowercasePrompt.contains('sabr')) {
-      return "As-Salamu Alaykum. Patience (Sabr) is a beautiful virtue in Islam. "
+      return 'As-Salamu Alaykum. Patience (Sabr) is a beautiful virtue in Islam. '
              "Allah says in the Quran, 'Indeed, Allah is with the patient' (Surah Al-Baqarah 2:153). "
-             "The Prophet Muhammad (peace be upon him) demonstrated patience throughout his life, "
-             "responding to difficulties with calmness and prayers for those who opposed him. "
+             'The Prophet Muhammad (peace be upon him) demonstrated patience throughout his life, '
+             'responding to difficulties with calmness and prayers for those who opposed him. '
              "When facing adversity, we are encouraged to remain steadfast, trust in Allah's wisdom, and pray.";
     }
 
     if (lowercasePrompt.contains('sadness') || lowercasePrompt.contains('grief') || lowercasePrompt.contains('sorrow')) {
-      return "As-Salamu Alaykum. It is natural to feel sadness. Even the Prophet Muhammad (peace be upon him) experienced grief, "
-             "such as during the Year of Sorrow. He taught us to turn to Allah in prayer. "
+      return 'As-Salamu Alaykum. It is natural to feel sadness. Even the Prophet Muhammad (peace be upon him) experienced grief, '
+             'such as during the Year of Sorrow. He taught us to turn to Allah in prayer. '
              "In the Quran, Allah comforts us: 'So verily, with every difficulty, there is relief' (Surah Ash-Sharh 94:5). "
-             "Be gentle with yourself, keep praying, and know that Allah is close to the brokenhearted.";
+             'Be gentle with yourself, keep praying, and know that Allah is close to the brokenhearted.';
     }
 
     if (lowercasePrompt.contains('salat') || lowercasePrompt.contains('prayer')) {
-      return "As-Salamu Alaykum. Salat is the second pillar of Islam and a direct connection to Allah. "
+      return 'As-Salamu Alaykum. Salat is the second pillar of Islam and a direct connection to Allah. '
              "Allah mentions in the Quran: 'Establish prayer, for indeed prayer prohibits immorality and wrongdoing' (Surah Al-Ankabut 29:45). "
-             "The Prophet (peace be upon him) described Salat as the coolness of his eyes, emphasizing its importance and beauty.";
+             'The Prophet (peace be upon him) described Salat as the coolness of his eyes, emphasizing its importance and beauty.';
     }
 
     if (ragContext.isNotEmpty) {
-      return "As-Salamu Alaykum. Based on the sacred texts: $ragContext. "
-             "We should strive to understand and apply these teachings with sincerity, humility, and gentle manners, "
-             "following the guidance of our Prophet Muhammad (peace be upon him).";
+      return 'As-Salamu Alaykum. Based on the sacred texts: $ragContext. '
+             'We should strive to understand and apply these teachings with sincerity, humility, and gentle manners, '
+             'following the guidance of our Prophet Muhammad (peace be upon him).';
     }
 
-    return "As-Salamu Alaykum. May Allah grant you peace and understanding. "
-           "Please let me know which verse, Hadith, or topic you would like to explore, "
-           "and we will discuss it in a respectful and gentle way.";
+    return 'As-Salamu Alaykum. May Allah grant you peace and understanding. '
+           'Please let me know which verse, Hadith, or topic you would like to explore, '
+           'and we will discuss it in a respectful and gentle way.';
   }
 }
 

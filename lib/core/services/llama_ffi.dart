@@ -1,3 +1,6 @@
+// ignore_for_file: camel_case_types
+// These typedefs intentionally mirror llama.cpp's snake_case C function
+// names 1:1, so the FFI bindings stay traceable to the native API they wrap.
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 

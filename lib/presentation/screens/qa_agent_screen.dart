@@ -174,7 +174,7 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
                           height: 4,
                           margin: const EdgeInsets.only(top: 12, bottom: 8),
                           decoration: BoxDecoration(
-                            color: AppTheme.textMuted.withOpacity(0.3),
+                            color: AppTheme.textMuted.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -318,7 +318,7 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
         if (snapshot.hasData && _currentConversationId != null) {
           final current = snapshot.data!.firstWhere(
             (c) => c.id == _currentConversationId,
-            orElse: () => Conversation(id: '', title: 'General Q&A', createdAt: 0, lastActive: 0),
+            orElse: () => const Conversation(id: '', title: 'General Q&A', createdAt: 0, lastActive: 0),
           );
           if (current.id.isNotEmpty) {
             title = current.title;
@@ -329,7 +329,7 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          color: AppTheme.surfaceMint.withOpacity(0.5),
+          color: AppTheme.surfaceMint.withValues(alpha: 0.5),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -382,7 +382,7 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
     // 1. Save user message
     await convoRepo.addMessage(_currentConversationId!, 'user', text, '[]');
     // Log search/question event for engagement tracking
-    ref.read(engagementServiceProvider).logSearchEvent(text);
+    unawaited(ref.read(engagementServiceProvider).logSearchEvent(text));
     await _loadMessages();
 
     setState(() {
@@ -521,10 +521,10 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
                                       ),
                                     ),
                                     backgroundColor:
-                                        AppTheme.emeraldGreen.withOpacity(0.08),
+                                        AppTheme.emeraldGreen.withValues(alpha: 0.08),
                                     side: BorderSide(
                                       color:
-                                          AppTheme.emeraldGreen.withOpacity(0.2),
+                                          AppTheme.emeraldGreen.withValues(alpha: 0.2),
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
@@ -692,7 +692,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
               width: 7,
               height: 7,
               decoration: BoxDecoration(
-                color: AppTheme.forestGreen.withOpacity(opacity),
+                color: AppTheme.forestGreen.withValues(alpha: opacity),
                 shape: BoxShape.circle,
               ),
             );

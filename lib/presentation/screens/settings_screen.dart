@@ -193,35 +193,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               title: 'AI Model',
               icon: Icons.memory_rounded,
               children: [
-                RadioListTile<String>(
-                  title: Text('Gemma 4 e2b (Lighter)',
-                      style: theme.textTheme.bodyMedium),
-                  subtitle: Text('Recommended for devices with <6GB RAM',
-                      style: theme.textTheme.labelLarge),
-                  value: 'e2b',
+                RadioGroup<String>(
                   groupValue: _selectedModel,
-                  activeColor: AppTheme.emeraldGreen,
                   onChanged: (val) {
                     if (val != null) {
                       setState(() => _selectedModel = val);
                       _updateSetting('selected_llm_model', val);
                     }
                   },
-                ),
-                RadioListTile<String>(
-                  title: Text('Gemma 4 e4b (Standard)',
-                      style: theme.textTheme.bodyMedium),
-                  subtitle: Text('Recommended for devices with ≥6GB RAM',
-                      style: theme.textTheme.labelLarge),
-                  value: 'e4b',
-                  groupValue: _selectedModel,
-                  activeColor: AppTheme.emeraldGreen,
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _selectedModel = val);
-                      _updateSetting('selected_llm_model', val);
-                    }
-                  },
+                  child: Column(
+                    children: [
+                      RadioListTile<String>(
+                        title: Text('Gemma 4 e2b (Lighter)',
+                            style: theme.textTheme.bodyMedium),
+                        subtitle: Text('Recommended for devices with <6GB RAM',
+                            style: theme.textTheme.labelLarge),
+                        value: 'e2b',
+                        activeColor: AppTheme.emeraldGreen,
+                      ),
+                      RadioListTile<String>(
+                        title: Text('Gemma 4 e4b (Standard)',
+                            style: theme.textTheme.bodyMedium),
+                        subtitle: Text('Recommended for devices with ≥6GB RAM',
+                            style: theme.textTheme.labelLarge),
+                        value: 'e4b',
+                        activeColor: AppTheme.emeraldGreen,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -237,7 +236,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   title: Text('Salat Notifications',
                       style: theme.textTheme.bodyMedium),
                   value: _salatNotifications,
-                  activeColor: AppTheme.emeraldGreen,
+                  activeThumbColor: AppTheme.emeraldGreen,
                   onChanged: (val) {
                     setState(() => _salatNotifications = val);
                     _updateSetting('salat_notifications', val.toString());

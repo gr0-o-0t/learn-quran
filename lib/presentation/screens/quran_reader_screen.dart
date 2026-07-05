@@ -82,7 +82,7 @@ class _SurahListView extends StatelessWidget {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: AppTheme.emeraldGreen.withOpacity(0.1),
+                      color: AppTheme.emeraldGreen.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Center(
@@ -167,7 +167,7 @@ class _JuzListView extends StatelessWidget {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: AppTheme.accentGold.withOpacity(0.1),
+                      color: AppTheme.accentGold.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Center(

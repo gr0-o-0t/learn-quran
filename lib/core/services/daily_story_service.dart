@@ -36,14 +36,14 @@ class DailyStoryService {
     final totalPrayers = await _userRepo.getEngagementValue('total_prayers_completed') ?? '0';
     final prayerStreak = await _userRepo.getEngagementValue('prayer_streak') ?? '0';
 
-    final prompt = "Generate a brief, beautiful, and inspiring Islamic moral reflection or story (150-250 words) suitable for a daily reflection card. Customize it for a user with these local metrics:\n"
-        "- Total Ayahs Read: $totalAyahs\n"
-        "- Reading Streak: $readingStreak days\n"
-        "- Last Read Verse: Surah $lastReadSurah:$lastReadAyah (Topic: $lastReadTopic)\n"
-        "- Recent Search Tags: $searchTags\n"
-        "- Recent Chat Sentiment: $sentiment\n"
-        "- Total Salat Completed: $totalPrayers\n"
-        "- Salat Streak: $prayerStreak days\n\n"
+    final prompt = 'Generate a brief, beautiful, and inspiring Islamic moral reflection or story (150-250 words) suitable for a daily reflection card. Customize it for a user with these local metrics:\n'
+        '- Total Ayahs Read: $totalAyahs\n'
+        '- Reading Streak: $readingStreak days\n'
+        '- Last Read Verse: Surah $lastReadSurah:$lastReadAyah (Topic: $lastReadTopic)\n'
+        '- Recent Search Tags: $searchTags\n'
+        '- Recent Chat Sentiment: $sentiment\n'
+        '- Total Salat Completed: $totalPrayers\n'
+        '- Salat Streak: $prayerStreak days\n\n'
         "Ensure the response is extremely gentle, wise, comforting, and authentic. Start with a title (e.g. 'Title: ...') and then write the story content. Do not include any HTML or extra formatting.";
 
     final stream = _llmService.generateResponseStream(prompt, '');

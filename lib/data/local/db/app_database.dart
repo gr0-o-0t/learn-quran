@@ -119,7 +119,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// Named constructor for tests — accepts any [QueryExecutor],
   /// typically `NativeDatabase.memory()`.
-  AppDatabase.forTesting(QueryExecutor executor) : super(executor);
+  AppDatabase.forTesting(super.executor);
 
   @override
   int get schemaVersion => 1;

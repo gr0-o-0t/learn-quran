@@ -76,7 +76,7 @@ class _JuzDetailScreenState extends ConsumerState<JuzDetailScreen> {
                                 height: 4,
                                 margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.textMuted.withOpacity(0.3),
+                                  color: AppTheme.textMuted.withValues(alpha: 0.3),
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
@@ -146,7 +146,7 @@ class _JuzDetailScreenState extends ConsumerState<JuzDetailScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.menu_book_rounded,
-                      size: 64, color: AppTheme.textMuted.withOpacity(0.3)),
+                      size: 64, color: AppTheme.textMuted.withValues(alpha: 0.3)),
                   const SizedBox(height: 16),
                   Text(
                     'No verses found in this Juz',
@@ -246,7 +246,7 @@ class _JuzDetailScreenState extends ConsumerState<JuzDetailScreen> {
                         const SizedBox(height: 16),
                         // Divider
                         Divider(
-                          color: AppTheme.textMuted.withOpacity(0.15),
+                          color: AppTheme.textMuted.withValues(alpha: 0.15),
                           height: 1,
                         ),
                         const SizedBox(height: 12),

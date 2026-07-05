@@ -160,7 +160,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final now = DateTime.now();
       final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
       final surahNumber = (dayOfYear % 114) + 1;
-      final ayahNumber = 1;
+      const ayahNumber = 1;
 
       final quranRepo = ref.read(quranRepositoryProvider);
       final verse = await quranRepo.getVerse(surahNumber, ayahNumber);
@@ -458,7 +458,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         color: AppTheme.surfaceMint,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.accentGold.withOpacity(0.3),
+          color: AppTheme.accentGold.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
