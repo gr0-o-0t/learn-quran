@@ -164,8 +164,31 @@ This file is updated dynamically to reflect the completion status of all tasks.
     box, `KnowledgeBaseDatabase` opens an empty schema until the user
     downloads `kb.db` from Settings, and `QuranReaderScreen` shows a setup
     prompt (mirroring the AI-setup one) until then.
-    The real download size for `kb_catalog.dart` is pending confirmation of
-    the `kb-v1.0.0` GitHub Actions run.
+    UPDATE (2026-07-05): `kb-v1.0.0` built successfully; real values
+    (size 259764224 bytes, sha256
+    afa19d6e5cf0b8c1d52eb4987f02ea5a3de36c184980fa82cf0e770eea9272e5)
+    verified via the GitHub API and wired into `kb_catalog.dart`. Merged to
+    `main` after a final whole-branch review found, and a fix resolved, a
+    Critical bug: `KbDownloadService.downloadKb()` could false-positive
+    treat the empty schema-only file `openKnowledgeBaseDatabase()` creates
+    at the download target path as a valid partial download, corrupting it
+    via a `Range` append. Fixed by staging downloads to a separate `.part`
+    file and sha256-verifying before an atomic rename into place; re-review
+    confirmed the fix closes the hole with no regressions.
+    Fast-follow (2026-07-05): addressed the review's deferred Minor
+    findings — `knowledgeBaseDatabaseProvider` now closes on dispose and
+    re-opens live via `ref.invalidate()` after a Settings download (no more
+    "restart the app" message), the startup safety net checks `PRAGMA
+    quick_check` instead of a bare `SELECT 1`, and the dead
+    `KnowledgeBaseDatabase.openBundled()` method was removed. Also found
+    live that Sahih al-Bukhari (9/7589) and Sahih Muslim (203/7563) each
+    have a small number of hadiths with no English translation in the
+    upstream fawazahmed0/hadith-api source itself — a genuine source gap,
+    not a fetch/parse bug. `tool/build_kb.dart` now skips these rather than
+    shipping blank content; published as `kb-v1.0.1` (size 259268608 bytes,
+    sha256
+    517dffad618e75fa226a471e873cdd5a1f7fc46d78b7c7025760cf1d4803246b,
+    verified via the GitHub API) and wired into `kb_catalog.dart`.
     Also discovered along the way: `sqlite-vec`/`vec0` (Task 4.1, marked
     Completed) does not actually load in this environment —
     `hasVectorExtension` is false, `CREATE VIRTUAL TABLE ... USING vec0`
