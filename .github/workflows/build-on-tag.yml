@@ -58,6 +58,12 @@ jobs:
   ios:
     name: iOS (unsigned .app)
     runs-on: macos-latest
+    # connectivity_plus (>=7.1.0) references NWPath.isUltraConstrained,
+    # declared only in the macOS 26 SDK — the runner's default Xcode
+    # (16.4) predates it. Xcode 26.1.1 is connectivity_plus's own
+    # documented minimum and is preinstalled on the runner image.
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
 
@@ -82,7 +88,9 @@ jobs:
       # while still proving the dart:ffi/native code compiles under a real
       # Xcode toolchain, which this project's own dev sandbox cannot do at
       # all. It is not an installable/distributable on-device IPA.
-      - run: flutter build ios --release --no-codesign --simulator
+      # Flutter only supports debug builds for the simulator target
+      # (release/profile require a real device toolchain).
+      - run: flutter build ios --debug --no-codesign --simulator
 
       - run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app Runner-iOS-simulator-unsigned.zip
 
@@ -95,6 +103,9 @@ jobs:
   macos:
     name: macOS (.app)
     runs-on: macos-latest
+    # See the iOS job above: connectivity_plus needs the macOS 26 SDK.
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
 
