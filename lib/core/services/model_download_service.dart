@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import '../models/model_catalog.dart';
 
 /// Reports download progress. [fraction] is 0.0-1.0, or 0 if [totalBytes]
@@ -21,48 +20,59 @@ class ModelDownloadCancelledException implements Exception {
   String toString() => 'ModelDownloadCancelledException';
 }
 
-/// Downloads GGUF model files from Hugging Face to app-local storage,
-/// resuming partial downloads via HTTP Range requests.
+/// Signature of [FileDownloader.download], narrowed to what this service
+/// needs — lets tests substitute a fake that never touches the network or
+/// the platform channel background_downloader normally uses.
+typedef DownloadFn = Future<TaskStatusUpdate> Function(
+  DownloadTask task, {
+  void Function(double)? onProgress,
+});
+
+/// Downloads GGUF model files from Hugging Face to app-local storage via
+/// [FileDownloader] (background_downloader), which uses native URLSessions
+/// (iOS) / DownloadWorker (Android) so the transfer keeps running when the
+/// screen locks or the app is backgrounded — unlike a hand-rolled `http`
+/// stream, which is tied to this app's own isolate and stalls as soon as
+/// the OS suspends it.
 class ModelDownloadService {
-  static const _defaultIdleTimeout = Duration(seconds: 30);
-
-  final http.Client _client;
+  final DownloadFn _download;
   final Directory? _modelsDirOverride;
-  final Duration _idleTimeout;
-  bool _cancelRequested = false;
+  String? _currentTaskId;
 
-  ModelDownloadService({http.Client? client})
-      : _client = client ?? http.Client(),
-        _modelsDirOverride = null,
-        _idleTimeout = _defaultIdleTimeout;
+  ModelDownloadService({DownloadFn? download})
+      : _download = download ?? _defaultDownload,
+        _modelsDirOverride = null;
 
-  /// For testing: bypasses path_provider and stores/reads files directly
-  /// under [modelsDir] instead of `<ApplicationDocumentsDirectory>/models`,
-  /// and allows shrinking the stall-detection [idleTimeout] so tests don't
-  /// have to wait out the real 30s production value.
+  /// For testing: [modelsDir] bypasses path_provider entirely (via
+  /// `BaseDirectory.root`), and [download] can replace the real
+  /// [FileDownloader] call with a fake that writes canned bytes directly.
   ModelDownloadService.forTesting({
     required Directory modelsDir,
-    http.Client? client,
-    Duration idleTimeout = _defaultIdleTimeout,
-  })  : _client = client ?? http.Client(),
-        _modelsDirOverride = modelsDir,
-        _idleTimeout = idleTimeout;
+    DownloadFn? download,
+  })  : _modelsDirOverride = modelsDir,
+        _download = download ?? _defaultDownload;
 
-  Future<Directory> _modelsDir() async {
+  static Future<TaskStatusUpdate> _defaultDownload(
+    DownloadTask task, {
+    void Function(double)? onProgress,
+  }) =>
+      FileDownloader().download(task, onProgress: onProgress);
+
+  DownloadTask _taskFor(ModelInfo model) {
     final override = _modelsDirOverride;
-    if (override != null) return override;
-    final docsDir = await getApplicationDocumentsDirectory();
-    final dir = Directory('${docsDir.path}/models');
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
+    return DownloadTask(
+      taskId: 'model-${model.id}',
+      url: model.downloadUrl,
+      filename: model.filename,
+      baseDirectory: override != null ? BaseDirectory.root : BaseDirectory.applicationDocuments,
+      directory: override != null ? override.path : 'models',
+      updates: Updates.progress,
+      allowPause: true,
+      retries: 3,
+    );
   }
 
-  Future<String> localPathFor(ModelInfo model) async {
-    final dir = await _modelsDir();
-    return '${dir.path}/${model.filename}';
-  }
+  Future<String> localPathFor(ModelInfo model) => _taskFor(model).filePath();
 
   /// True only if the local file exists AND its size matches
   /// [ModelInfo.sizeBytes] exactly — a partial/interrupted download must
@@ -74,69 +84,49 @@ class ModelDownloadService {
   }
 
   /// Downloads (or resumes) [model], calling [onProgress] as bytes arrive.
-  /// If a partial file already exists and is smaller than
-  /// [ModelInfo.sizeBytes], sends `Range: bytes=<existing-length>-` and
-  /// appends the response to the existing file. If the server responds
-  /// 200 (ignoring the Range request) rather than 206, the download
-  /// restarts from scratch instead of appending onto stale bytes.
   Future<void> downloadModel(
     ModelInfo model, {
     void Function(DownloadProgress)? onProgress,
   }) async {
-    _cancelRequested = false;
-    final path = await localPathFor(model);
-    final file = File(path);
-    final existingLength = await file.exists() ? await file.length() : 0;
-
-    // Exact match only — this must agree with isDownloaded's exact-size
-    // check. An oversized/corrupt file (> sizeBytes) falls through and
-    // restarts the download below rather than silently no-op'ing forever.
-    if (existingLength == model.sizeBytes) {
-      onProgress?.call(DownloadProgress(existingLength, model.sizeBytes));
+    if (await isDownloaded(model)) {
+      onProgress?.call(DownloadProgress(model.sizeBytes, model.sizeBytes));
       return;
     }
 
-    final validPartial = existingLength > 0 && existingLength < model.sizeBytes;
-    final request = http.Request('GET', Uri.parse(model.downloadUrl));
-    if (validPartial) {
-      request.headers['Range'] = 'bytes=$existingLength-';
-    }
-
-    final response = await _client.send(request);
-    if (response.statusCode != 200 && response.statusCode != 206) {
-      throw HttpException(
-        'Unexpected status ${response.statusCode} downloading ${model.displayName}',
-      );
-    }
-
-    final resuming = response.statusCode == 206 && validPartial;
-    final sink = file.openWrite(
-      mode: resuming ? FileMode.append : FileMode.write,
-    );
-    var received = resuming ? existingLength : 0;
-
+    final task = _taskFor(model);
+    _currentTaskId = task.taskId;
+    final TaskStatusUpdate result;
     try {
-      // ponytail: CDN downloads can stall silently mid-transfer (e.g. an
-      // edge-cache miss on a specific pinned revision) with no error and no
-      // more bytes — without an idle timeout that hangs the UI forever.
-      await for (final chunk in response.stream.timeout(_idleTimeout)) {
-        if (_cancelRequested) {
-          throw ModelDownloadCancelledException();
-        }
-        sink.add(chunk);
-        received += chunk.length;
-        onProgress?.call(DownloadProgress(received, model.sizeBytes));
-      }
+      result = await _download(
+        task,
+        onProgress: (progress) {
+          if (progress >= 0) {
+            onProgress?.call(DownloadProgress((progress * model.sizeBytes).round(), model.sizeBytes));
+          }
+        },
+      );
     } finally {
-      await sink.close();
+      _currentTaskId = null;
+    }
+
+    if (result.status == TaskStatus.canceled) {
+      throw ModelDownloadCancelledException();
+    }
+    if (result.status != TaskStatus.complete) {
+      throw HttpException(
+        'Failed to download ${model.displayName}: ${result.status}'
+        '${result.exception != null ? ' (${result.exception})' : ''}',
+      );
     }
   }
 
-  /// Signals the in-flight [downloadModel] call (if any) to stop after its
-  /// next chunk. The partial file is left on disk so a later call can
-  /// resume from it.
+  /// Signals the in-flight [downloadModel] call (if any) to stop. The
+  /// partial file is left on disk so a later call can resume from it.
   void cancelDownload() {
-    _cancelRequested = true;
+    final taskId = _currentTaskId;
+    if (taskId != null) {
+      FileDownloader().cancelTaskWithId(taskId);
+    }
   }
 
   Future<void> deleteModel(ModelInfo model) async {

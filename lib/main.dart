@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/models/kb_catalog.dart';
@@ -17,6 +18,11 @@ import 'presentation/screens/permissions_onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Activates background_downloader's tracking database and re-registers it
+  // with the native platform, so model/knowledge-base downloads that were
+  // still running when the app was suspended or killed are properly
+  // reconnected instead of silently orphaned.
+  unawaited(FileDownloader().start());
   final kbPath = await KbDownloadService().localPathFor(kCurrentKb);
   KnowledgeBaseDatabase? initialKnowledgeBaseDatabase = await _openKnowledgeBaseDatabaseSafely(kbPath);
   // Best-effort: never let background-alarm setup delay or block app startup.

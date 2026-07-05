@@ -1,9 +1,7 @@
-import 'dart:async';
 import 'dart:io';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:learn_quran/core/models/kb_catalog.dart';
 import 'package:learn_quran/core/services/kb_download_service.dart';
 
@@ -16,17 +14,18 @@ final _testKb = KbInfo(
   sha256: sha256.convert(List.filled(20, 65)).toString(),
 );
 
-class _StallingClient extends http.BaseClient {
-  final List<int> initialBytes;
-  _StallingClient(this.initialBytes);
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    // ignore: close_sinks — deliberately never closed, to simulate a stall.
-    final controller = StreamController<List<int>>();
-    controller.add(initialBytes);
-    return http.StreamedResponse(controller.stream, 200, contentLength: 20);
-  }
+/// Fakes [FileDownloader.download]: writes [bytes] to the task's own file
+/// path (exactly like the real plugin would, once a transfer completes) and
+/// reports one progress update, without ever touching the network or the
+/// platform channel background_downloader normally uses.
+DownloadFn _fakeDownloadWriting(List<int> bytes, {TaskStatus status = TaskStatus.complete}) {
+  return (task, {onProgress}) async {
+    if (status == TaskStatus.complete) {
+      await File(await task.filePath()).writeAsBytes(bytes);
+      onProgress?.call(1.0);
+    }
+    return TaskStatusUpdate(task, status);
+  };
 }
 
 void main() {
@@ -56,12 +55,10 @@ void main() {
         sizeBytes: 20,
         sha256: sha256.convert(expectedBytes).toString(),
       );
-      final client = MockClient((request) async {
-        expect(request.url.toString(), testKb.downloadUrl);
-        expect(request.headers.containsKey('Range'), isFalse);
-        return http.Response.bytes(expectedBytes, 200);
-      });
-      final service = KbDownloadService.forTesting(kbDir: tempDir, client: client);
+      final service = KbDownloadService.forTesting(
+        kbDir: tempDir,
+        download: _fakeDownloadWriting(expectedBytes),
+      );
 
       final progressUpdates = <KbDownloadProgress>[];
       await service.downloadKb(testKb, onProgress: progressUpdates.add);
@@ -74,38 +71,25 @@ void main() {
       expect(await File('$path.part').exists(), isFalse);
     });
 
-    test('downloadKb resumes a partial file via a Range request', () async {
-      final firstHalf = List<int>.generate(10, (i) => 65 + i);
-      final secondHalf = List<int>.generate(10, (i) => 75 + i);
-      final fullBytes = [...firstHalf, ...secondHalf];
-      final testKb = KbInfo(
-        version: 'test',
-        filename: 'kb-test.db',
-        sizeBytes: 20,
-        sha256: sha256.convert(fullBytes).toString(),
+    test('downloadKb is a no-op if the file is already fully downloaded', () async {
+      final bytes = List.filled(20, 65);
+      final service = KbDownloadService.forTesting(
+        kbDir: tempDir,
+        download: (task, {onProgress}) => throw StateError('should not be called'),
       );
-      // A genuine partial download resumes from the staging `.part` file,
-      // never from the final path.
-      final partPath = '${tempDir.path}/${testKb.filename}.part';
-      await File(partPath).writeAsBytes(firstHalf);
+      final path = await service.localPathFor(_testKb);
+      await File(path).writeAsBytes(bytes);
 
-      final client = MockClient((request) async {
-        expect(request.headers['Range'], 'bytes=10-');
-        return http.Response.bytes(secondHalf, 206);
-      });
-      final service = KbDownloadService.forTesting(kbDir: tempDir, client: client);
+      final progressUpdates = <KbDownloadProgress>[];
+      await service.downloadKb(_testKb, onProgress: progressUpdates.add);
 
-      await service.downloadKb(testKb);
-
-      final finalPath = await service.localPathFor(testKb);
-      expect(await File(finalPath).readAsBytes(), fullBytes);
-      expect(await File(partPath).exists(), isFalse);
+      expect(progressUpdates.single.bytesReceived, 20);
     });
 
     test(
-      'downloadKb ignores an unrelated file already sitting at the final path '
-      '(e.g. a Drift-created empty schema database) instead of treating it as '
-      'a resumable partial download',
+      'downloadKb ends up with correct content even if an unrelated file '
+      '(e.g. a Drift-created empty schema database) already sits at the '
+      'final path — resume/staging decisions never look at that file',
       () async {
         final serverBytes = List<int>.generate(20, (i) => 200 + i);
         final testKb = KbInfo(
@@ -114,18 +98,15 @@ void main() {
           sizeBytes: 20,
           sha256: sha256.convert(serverBytes).toString(),
         );
-        final finalPath = '${tempDir.path}/${testKb.filename}';
+        final service = KbDownloadService.forTesting(
+          kbDir: tempDir,
+          download: _fakeDownloadWriting(serverBytes),
+        );
+        final finalPath = await service.localPathFor(testKb);
         // Simulates the schema-only sqlite file Drift auto-creates at the
         // production path before anything has ever been downloaded: some
         // unrelated bytes, strictly between 0 and sizeBytes in length.
         await File(finalPath).writeAsBytes(List.filled(5, 99));
-
-        final client = MockClient((request) async {
-          // Must NOT be treated as a partial download of the unrelated file.
-          expect(request.headers.containsKey('Range'), isFalse);
-          return http.Response.bytes(serverBytes, 200);
-        });
-        final service = KbDownloadService.forTesting(kbDir: tempDir, client: client);
 
         await service.downloadKb(testKb);
 
@@ -146,8 +127,10 @@ void main() {
           // Deliberately wrong — doesn't match serverBytes' real hash.
           sha256: sha256.convert(List.filled(20, 0)).toString(),
         );
-        final client = MockClient((request) async => http.Response.bytes(serverBytes, 200));
-        final service = KbDownloadService.forTesting(kbDir: tempDir, client: client);
+        final service = KbDownloadService.forTesting(
+          kbDir: tempDir,
+          download: _fakeDownloadWriting(serverBytes),
+        );
 
         await expectLater(
           () => service.downloadKb(testKb),
@@ -160,17 +143,27 @@ void main() {
       },
     );
 
-    test('downloadKb throws instead of hanging forever when the stream stalls', () async {
-      final client = _StallingClient(List.filled(10, 65));
+    test('downloadKb throws KbDownloadCancelledException when the task is canceled', () async {
       final service = KbDownloadService.forTesting(
         kbDir: tempDir,
-        client: client,
-        idleTimeout: const Duration(milliseconds: 50),
+        download: _fakeDownloadWriting(const [], status: TaskStatus.canceled),
       );
 
       await expectLater(
         () => service.downloadKb(_testKb),
-        throwsA(isA<TimeoutException>()),
+        throwsA(isA<KbDownloadCancelledException>()),
+      );
+    });
+
+    test('downloadKb throws for any other non-complete status', () async {
+      final service = KbDownloadService.forTesting(
+        kbDir: tempDir,
+        download: _fakeDownloadWriting(const [], status: TaskStatus.failed),
+      );
+
+      await expectLater(
+        () => service.downloadKb(_testKb),
+        throwsA(isA<HttpException>()),
       );
     });
 
@@ -182,8 +175,10 @@ void main() {
         sizeBytes: 20,
         sha256: sha256.convert(bytes).toString(),
       );
-      final client = MockClient((request) async => http.Response.bytes(bytes, 200));
-      final service = KbDownloadService.forTesting(kbDir: tempDir, client: client);
+      final service = KbDownloadService.forTesting(
+        kbDir: tempDir,
+        download: _fakeDownloadWriting(bytes),
+      );
       await service.downloadKb(testKb);
       expect(await service.isDownloaded(testKb), isTrue);
 

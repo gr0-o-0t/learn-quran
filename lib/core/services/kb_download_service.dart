@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import '../models/kb_catalog.dart';
 
 class KbDownloadProgress {
@@ -20,7 +19,7 @@ class KbDownloadCancelledException implements Exception {
 /// Thrown when a fully-downloaded knowledge base file's sha256 doesn't match
 /// [KbInfo.sha256]. The corrupt staging file is deleted before this is
 /// thrown, so the bad content never lands at the production path and never
-/// lingers around to poison a future resume attempt.
+/// lingers around to poison a future download attempt.
 class KbIntegrityException implements Exception {
   final String expected;
   final String actual;
@@ -31,50 +30,64 @@ class KbIntegrityException implements Exception {
       'downloaded content hashed to $actual';
 }
 
+/// Signature of [FileDownloader.download], narrowed to what this service
+/// needs — lets tests substitute a fake that never touches the network or
+/// the platform channel background_downloader normally uses.
+typedef DownloadFn = Future<TaskStatusUpdate> Function(
+  DownloadTask task, {
+  void Function(double)? onProgress,
+});
+
+/// Downloads the knowledge base via [FileDownloader] (background_downloader),
+/// which uses native URLSessions (iOS) / DownloadWorker (Android) so the
+/// transfer keeps running when the screen locks or the app is backgrounded —
+/// unlike a hand-rolled `http` stream, which is tied to this app's own
+/// isolate and stalls as soon as the OS suspends it.
+///
+/// Downloads are staged to `<kb.filename>.part` (never the path
+/// `KnowledgeBaseDatabase`/Drift might have already created an empty
+/// schema-only file at — see `database_provider.dart`) and only renamed to
+/// the production path after its sha256 is verified, so a corrupt or
+/// unrelated file can never be mistaken for a valid knowledge base.
 class KbDownloadService {
-  static const _defaultIdleTimeout = Duration(seconds: 30);
-
-  final http.Client _client;
+  final DownloadFn _download;
   final Directory? _kbDirOverride;
-  final Duration _idleTimeout;
-  bool _cancelRequested = false;
+  String? _currentTaskId;
 
-  KbDownloadService({http.Client? client})
-      : _client = client ?? http.Client(),
-        _kbDirOverride = null,
-        _idleTimeout = _defaultIdleTimeout;
+  KbDownloadService({DownloadFn? download})
+      : _download = download ?? _defaultDownload,
+        _kbDirOverride = null;
 
+  /// For testing: [kbDir] bypasses path_provider entirely (via
+  /// `BaseDirectory.root`), and [download] can replace the real
+  /// [FileDownloader] call with a fake that writes canned bytes directly.
   KbDownloadService.forTesting({
     required Directory kbDir,
-    http.Client? client,
-    Duration idleTimeout = _defaultIdleTimeout,
-  })  : _client = client ?? http.Client(),
-        _kbDirOverride = kbDir,
-        _idleTimeout = idleTimeout;
+    DownloadFn? download,
+  })  : _kbDirOverride = kbDir,
+        _download = download ?? _defaultDownload;
 
-  Future<Directory> _kbBaseDir() async {
+  static Future<TaskStatusUpdate> _defaultDownload(
+    DownloadTask task, {
+    void Function(double)? onProgress,
+  }) =>
+      FileDownloader().download(task, onProgress: onProgress);
+
+  DownloadTask _partTaskFor(KbInfo kb) {
     final override = _kbDirOverride;
-    if (override != null) return override;
-    final docsDir = await getApplicationDocumentsDirectory();
-    final dir = Directory('${docsDir.path}/kb');
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
+    return DownloadTask(
+      taskId: 'kb-${kb.version}',
+      url: kb.downloadUrl,
+      filename: '${kb.filename}.part',
+      baseDirectory: override != null ? BaseDirectory.root : BaseDirectory.applicationDocuments,
+      directory: override != null ? override.path : 'kb',
+      updates: Updates.progress,
+      allowPause: true,
+      retries: 3,
+    );
   }
 
-  Future<String> localPathFor(KbInfo kb) async {
-    final dir = await _kbBaseDir();
-    return '${dir.path}/${kb.filename}';
-  }
-
-  /// Staging path a download is written/resumed against. Kept separate from
-  /// [localPathFor] so a fresh, empty schema-only database file that Drift
-  /// may have already created at the production path (see
-  /// `openKnowledgeBaseDatabase`) can never be mistaken for a genuine
-  /// partial download of this exact resource, and so the production path
-  /// only ever holds a complete, hash-verified file.
-  Future<String> _partPathFor(KbInfo kb) async => '${await localPathFor(kb)}.part';
+  Future<String> localPathFor(KbInfo kb) => _partTaskFor(kb).filePath(withFilename: kb.filename);
 
   Future<bool> isDownloaded(KbInfo kb) async {
     final file = File(await localPathFor(kb));
@@ -86,57 +99,54 @@ class KbDownloadService {
     KbInfo kb, {
     void Function(KbDownloadProgress)? onProgress,
   }) async {
-    _cancelRequested = false;
     final finalPath = await localPathFor(kb);
-
     if (await isDownloaded(kb)) {
       onProgress?.call(KbDownloadProgress(kb.sizeBytes, kb.sizeBytes));
       return;
     }
 
-    final partPath = await _partPathFor(kb);
-    final partFile = File(partPath);
-    final existingLength = await partFile.exists() ? await partFile.length() : 0;
-
-    final validPartial = existingLength > 0 && existingLength < kb.sizeBytes;
-    final request = http.Request('GET', Uri.parse(kb.downloadUrl));
-    if (validPartial) {
-      request.headers['Range'] = 'bytes=$existingLength-';
-    }
-
-    final response = await _client.send(request);
-    if (response.statusCode != 200 && response.statusCode != 206) {
-      throw HttpException('Unexpected status ${response.statusCode} downloading knowledge base ${kb.version}');
-    }
-
-    final resuming = response.statusCode == 206 && validPartial;
-    final sink = partFile.openWrite(mode: resuming ? FileMode.append : FileMode.write);
-    var received = resuming ? existingLength : 0;
-
+    final task = _partTaskFor(kb);
+    _currentTaskId = task.taskId;
+    final TaskStatusUpdate result;
     try {
-      await for (final chunk in response.stream.timeout(_idleTimeout)) {
-        if (_cancelRequested) {
-          throw KbDownloadCancelledException();
-        }
-        sink.add(chunk);
-        received += chunk.length;
-        onProgress?.call(KbDownloadProgress(received, kb.sizeBytes));
-      }
+      result = await _download(
+        task,
+        onProgress: (progress) {
+          if (progress >= 0) {
+            onProgress?.call(KbDownloadProgress((progress * kb.sizeBytes).round(), kb.sizeBytes));
+          }
+        },
+      );
     } finally {
-      await sink.close();
+      _currentTaskId = null;
     }
 
+    if (result.status == TaskStatus.canceled) {
+      throw KbDownloadCancelledException();
+    }
+    if (result.status != TaskStatus.complete) {
+      throw HttpException(
+        'Failed to download knowledge base ${kb.version}: ${result.status}'
+        '${result.exception != null ? ' (${result.exception})' : ''}',
+      );
+    }
+
+    final partFile = File(await task.filePath());
     final actualHash = (await sha256.bind(partFile.openRead()).first).toString();
     if (actualHash != kb.sha256) {
       await partFile.delete();
       throw KbIntegrityException(expected: kb.sha256, actual: actualHash);
     }
-
     await partFile.rename(finalPath);
   }
 
+  /// Signals the in-flight [downloadKb] call (if any) to stop. The staged
+  /// `.part` file is left in place so a later call can resume from it.
   void cancelDownload() {
-    _cancelRequested = true;
+    final taskId = _currentTaskId;
+    if (taskId != null) {
+      FileDownloader().cancelTaskWithId(taskId);
+    }
   }
 
   Future<void> deleteKb(KbInfo kb) async {
@@ -144,7 +154,7 @@ class KbDownloadService {
     if (await file.exists()) {
       await file.delete();
     }
-    final partFile = File(await _partPathFor(kb));
+    final partFile = File(await _partTaskFor(kb).filePath());
     if (await partFile.exists()) {
       await partFile.delete();
     }

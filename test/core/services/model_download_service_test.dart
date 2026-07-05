@@ -1,26 +1,8 @@
-import 'dart:async';
 import 'dart:io';
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:learn_quran/core/models/model_catalog.dart';
 import 'package:learn_quran/core/services/model_download_service.dart';
-
-/// A client that sends [initialBytes] and then never sends more data and
-/// never closes the stream — reproducing a CDN connection that stalls
-/// mid-transfer instead of erroring or completing.
-class _StallingClient extends http.BaseClient {
-  final List<int> initialBytes;
-  _StallingClient(this.initialBytes);
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    // ignore: close_sinks — deliberately never closed, to simulate a stall.
-    final controller = StreamController<List<int>>();
-    controller.add(initialBytes);
-    return http.StreamedResponse(controller.stream, 200, contentLength: 20);
-  }
-}
 
 const _testModel = ModelInfo(
   id: 'test',
@@ -31,6 +13,20 @@ const _testModel = ModelInfo(
   revision: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
   sizeBytes: 20,
 );
+
+/// Fakes [FileDownloader.download]: writes [bytes] to the task's own file
+/// path (exactly like the real plugin would, once a transfer completes) and
+/// reports one progress update, without ever touching the network or the
+/// platform channel background_downloader normally uses.
+DownloadFn _fakeDownloadWriting(List<int> bytes, {TaskStatus status = TaskStatus.complete}) {
+  return (task, {onProgress}) async {
+    if (status == TaskStatus.complete) {
+      await File(await task.filePath()).writeAsBytes(bytes);
+      onProgress?.call(1.0);
+    }
+    return TaskStatusUpdate(task, status);
+  };
+}
 
 void main() {
   late Directory tempDir;
@@ -63,12 +59,10 @@ void main() {
 
     test('downloadModel writes the full response body to the expected path', () async {
       final expectedBytes = List<int>.generate(20, (i) => 65 + i); // 'A'..'T'
-      final client = MockClient((request) async {
-        expect(request.url.toString(), _testModel.downloadUrl);
-        expect(request.headers.containsKey('Range'), isFalse);
-        return http.Response.bytes(expectedBytes, 200);
-      });
-      final service = ModelDownloadService.forTesting(modelsDir: tempDir, client: client);
+      final service = ModelDownloadService.forTesting(
+        modelsDir: tempDir,
+        download: _fakeDownloadWriting(expectedBytes),
+      );
 
       final progressUpdates = <DownloadProgress>[];
       await service.downloadModel(_testModel, onProgress: progressUpdates.add);
@@ -80,68 +74,46 @@ void main() {
       expect(progressUpdates.last.totalBytes, 20);
     });
 
-    test('downloadModel resumes a partial file via a Range request', () async {
-      final path = '${tempDir.path}/${_testModel.filename}';
-      final firstHalf = List<int>.generate(10, (i) => 65 + i); // 'A'..'J'
-      final secondHalf = List<int>.generate(10, (i) => 75 + i); // 'K'..'T'
-      await File(path).writeAsBytes(firstHalf);
+    test('downloadModel is a no-op if the file is already fully downloaded', () async {
+      final service = ModelDownloadService.forTesting(
+        modelsDir: tempDir,
+        download: (task, {onProgress}) => throw StateError('should not be called'),
+      );
+      final path = await service.localPathFor(_testModel);
+      await File(path).writeAsBytes(List.filled(20, 65));
 
-      final client = MockClient((request) async {
-        expect(request.headers['Range'], 'bytes=10-');
-        return http.Response.bytes(secondHalf, 206);
-      });
-      final service = ModelDownloadService.forTesting(modelsDir: tempDir, client: client);
+      final progressUpdates = <DownloadProgress>[];
+      await service.downloadModel(_testModel, onProgress: progressUpdates.add);
 
-      await service.downloadModel(_testModel);
-
-      expect(await File(path).readAsBytes(), [...firstHalf, ...secondHalf]);
-      expect(await service.isDownloaded(_testModel), isTrue);
+      expect(progressUpdates.single.bytesReceived, 20);
     });
 
-    test('downloadModel restarts instead of appending when the server ignores Range', () async {
-      final path = '${tempDir.path}/${_testModel.filename}';
-      await File(path).writeAsBytes(List.filled(10, 65));
-      final fullBody = List<int>.generate(20, (i) => 65 + i);
-
-      // Server responds 200 (whole file) even though we sent a Range header —
-      // must not append fullBody onto the stale partial bytes.
-      final client = MockClient((request) async => http.Response.bytes(fullBody, 200));
-      final service = ModelDownloadService.forTesting(modelsDir: tempDir, client: client);
-
-      await service.downloadModel(_testModel);
-
-      expect(await File(path).readAsBytes(), fullBody);
-    });
-
-    test('downloadModel throws on a non-2xx response', () async {
-      final client = MockClient((request) async => http.Response('not found', 404));
-      final service = ModelDownloadService.forTesting(modelsDir: tempDir, client: client);
+    test('downloadModel throws for a non-complete status', () async {
+      final service = ModelDownloadService.forTesting(
+        modelsDir: tempDir,
+        download: _fakeDownloadWriting(const [], status: TaskStatus.notFound),
+      );
 
       expect(() => service.downloadModel(_testModel), throwsException);
     });
 
-    test('downloadModel throws instead of hanging forever when the stream stalls', () async {
-      // Simulates a CDN that serves a burst of bytes then goes silent
-      // without closing the connection or erroring — the real-world cause
-      // of a download that appears to freeze partway through.
-      final client = _StallingClient(List.filled(10, 65)); // 10 of 20 bytes, then silence
+    test('downloadModel throws ModelDownloadCancelledException when the task is canceled', () async {
       final service = ModelDownloadService.forTesting(
         modelsDir: tempDir,
-        client: client,
-        idleTimeout: const Duration(milliseconds: 50),
+        download: _fakeDownloadWriting(const [], status: TaskStatus.canceled),
       );
 
       await expectLater(
         () => service.downloadModel(_testModel),
-        throwsA(isA<TimeoutException>()),
+        throwsA(isA<ModelDownloadCancelledException>()),
       );
     });
 
     test('deleteModel removes the downloaded file', () async {
-      final client = MockClient(
-        (request) async => http.Response.bytes(List.filled(20, 65), 200),
+      final service = ModelDownloadService.forTesting(
+        modelsDir: tempDir,
+        download: _fakeDownloadWriting(List.filled(20, 65)),
       );
-      final service = ModelDownloadService.forTesting(modelsDir: tempDir, client: client);
       await service.downloadModel(_testModel);
       expect(await service.isDownloaded(_testModel), isTrue);
 

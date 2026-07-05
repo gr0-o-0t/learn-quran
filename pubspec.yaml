@@ -36,6 +36,9 @@ dependencies:
   # Runtime model downloads
   http: ^1.6.0
   crypto: ^3.0.7
+  # Background-capable downloads (survive screen lock / app backgrounding)
+  # for the AI model and knowledge base downloads.
+  background_downloader: ^9.5.5
   # Pinned below 7.1.0: that and later reference NWPath.isUltraConstrained,
   # which only exists in the macOS/iOS 26 SDKs. Our usage (checkConnectivity
   # + ConnectivityResult.wifi) has been stable since well before 7.0.0, so
