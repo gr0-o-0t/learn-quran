@@ -302,7 +302,6 @@ jobs:
             learn_quran-linux.tar.gz
             learn_quran-linux-x86_64.AppImage
           if-no-files-found: error
-          if-no-files-found: error
 
   release:
     name: Publish release
