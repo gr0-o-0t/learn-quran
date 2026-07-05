@@ -1,0 +1,156 @@
+name: Build on tag
+
+# Builds every real (non-web) platform target when a semver tag is pushed.
+# Web is intentionally excluded: onnxruntime, llama_ffi.dart, and Drift's
+# NativeDatabase are all dart:ffi-based and cannot compile to JavaScript at
+# all — see Tracker.md Phase 11 for details. That needs a separate
+# architecture project (Drift WASM backend, a JS-interop embedding runtime,
+# a browser-capable LLM runtime), not a CI config.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+env:
+  FLUTTER_VERSION: "3.44.2"
+
+jobs:
+  android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # No android/key.properties secret is configured, so this falls back
+      # to debug signing (android/app/build.gradle.kts already handles that
+      # gracefully) — fine for a build-verification artifact, but this is
+      # NOT a Play Store-ready release. Add key.properties/keystore secrets
+      # here to produce a real release-signed build.
+      - run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS (unsigned .app)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # No Apple Developer signing certificates/provisioning profiles are
+      # configured, so this builds an unsigned .app for compile-verification
+      # only — it proves the dart:ffi/native code actually builds under a
+      # real Xcode toolchain (which this project's own dev sandbox cannot
+      # do at all). It is not an installable/distributable IPA.
+      - run: flutter build ios --release --no-codesign
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios-app-unsigned
+          path: build/ios/iphoneos/Runner.app
+          if-no-files-found: error
+
+  macos:
+    name: macOS (.app)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # Same signing caveat as iOS: no Developer ID certificate configured,
+      # so codesigning is disabled and the .app is unsigned/build-verification
+      # only, not notarization-ready for distribution outside this CI run.
+      - run: flutter build macos --release
+        env:
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-app-unsigned
+          path: build/macos/Build/Products/Release/Runner.app
+          if-no-files-found: error
+
+  windows:
+    name: Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter build windows --release
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-app
+          path: build/windows/x64/runner/Release
+          if-no-files-found: error
+
+  linux:
+    name: Linux (bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Matches the toolchain installed by hand for this same build in the
+      # project's dev sandbox: clang/ninja/pkg-config for the CMake-based
+      # Flutter Linux build, GTK3 dev headers for the embedder, and
+      # GStreamer dev headers for the audioplayers_linux plugin.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y clang ninja-build libgtk-3-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter build linux --release
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-bundle
+          path: build/linux/x64/release/bundle
+          if-no-files-found: error
