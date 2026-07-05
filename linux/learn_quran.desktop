@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Learn Quran
+GenericName=Quran Study
+Comment=Offline Quran learning and understanding app
+Exec=learn_quran
+Icon=learn_quran
+Terminal=false
+Categories=Education;
