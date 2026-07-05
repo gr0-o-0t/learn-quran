@@ -3,9 +3,9 @@ import 'build_kb.dart' as build_kb;
 
 /// Permanent harness for actually running `build_kb.dart`'s `main()`.
 ///
-/// `EmbeddingService`/`KnowledgeBaseDatabase.openBundled` load their ONNX
-/// model and bundled assets via `rootBundle`, which needs a Flutter engine
-/// (`dart:ui`) — unavailable to a bare `dart run tool/build_kb.dart`. This
+/// `EmbeddingService` loads its ONNX model and vocab via `rootBundle`, which
+/// needs a Flutter engine (`dart:ui`) — unavailable to a bare
+/// `dart run tool/build_kb.dart`. This
 /// hosts the exact same, unmodified `build_kb.main()` under `flutter test`,
 /// which does provide those bindings. No product code is changed to work
 /// around this; it's purely an invocation mechanism.

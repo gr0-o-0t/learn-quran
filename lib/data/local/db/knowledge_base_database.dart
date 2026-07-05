@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 
@@ -85,22 +84,5 @@ class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
         embedding BLOB
       );
     ''');
-  }
-
-  /// Copies the bundled [assetPath] to [destinationPath] if nothing exists
-  /// there yet, then opens it. Mirrors the existing copy-on-first-launch
-  /// pattern `AppDatabase._openConnection()` used for `quran_base.db`.
-  static Future<KnowledgeBaseDatabase> openBundled({
-    required String assetPath,
-    required String destinationPath,
-  }) async {
-    final file = File(destinationPath);
-    if (!await file.exists()) {
-      await Directory(file.parent.path).create(recursive: true);
-      final data = await rootBundle.load(assetPath);
-      final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      await file.writeAsBytes(bytes);
-    }
-    return KnowledgeBaseDatabase.fromFile(destinationPath);
   }
 }

@@ -131,10 +131,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           if (mounted) setState(() => _kbDownloadProgress = progress.fraction);
         },
       );
+      ref.invalidate(knowledgeBaseDatabaseProvider);
       if (mounted) {
         setState(() => _kbDownloading = false);
+      }
+      await _checkKbStatus();
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Knowledge base updated. Restart the app to apply it.')),
+          const SnackBar(content: Text('Knowledge base updated.')),
         );
       }
     } catch (_) {
