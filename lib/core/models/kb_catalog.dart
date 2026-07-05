@@ -17,11 +17,13 @@ class KbInfo {
 }
 
 /// The current knowledge base version the app knows how to fetch.
-/// Verified against the real kb-v1.0.0 GitHub Release (2026-07-05):
-/// size 259764224 bytes, sha256 afa19d6e5cf0b8c1d52eb4987f02ea5a3de36c184980fa82cf0e770eea9272e5.
+/// Verified against the real kb-v1.0.1 GitHub Release (2026-07-05):
+/// size 259268608 bytes, sha256 517dffad618e75fa226a471e873cdd5a1f7fc46d78b7c7025760cf1d4803246b.
+/// v1.0.1 drops the ~212 hadith rows with no upstream English text that
+/// v1.0.0 shipped with blank englishText (see tool/build_kb.dart).
 const KbInfo kCurrentKb = KbInfo(
-  version: '1.0.0',
+  version: '1.0.1',
   filename: 'kb.db',
-  sizeBytes: 259764224,
-  sha256: 'afa19d6e5cf0b8c1d52eb4987f02ea5a3de36c184980fa82cf0e770eea9272e5',
+  sizeBytes: 259268608,
+  sha256: '517dffad618e75fa226a471e873cdd5a1f7fc46d78b7c7025760cf1d4803246b',
 );
