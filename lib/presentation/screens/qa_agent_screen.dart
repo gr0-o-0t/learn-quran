@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/providers/repository_providers.dart';
 import '../../core/services/llm_service.dart';
-import '../../core/theme/quran_data.dart';
 import '../../data/repositories/rag_repository.dart';
 import '../../data/local/db/app_database.dart';
 
@@ -19,13 +18,6 @@ const aiSetupPromptDismissedKey = 'ai_setup_prompt_dismissed';
 /// already dismissed the prompt ([dismissedFlag] isn't `'true'`).
 bool needsAiSetupPrompt({required String? modelPath, required String? dismissedFlag}) {
   return modelPath == null && dismissedFlag != 'true';
-}
-
-/// English name for surah [number] (1-114), e.g. 'Al-Fatiha'. Falls back to
-/// the bare number if it's out of range (shouldn't happen with real KB data).
-String _surahName(int number) {
-  if (number < 1 || number > quranSurahs.length) return '$number';
-  return quranSurahs[number - 1]['nameEn'] as String;
 }
 
 class QaAgentScreen extends ConsumerStatefulWidget {
@@ -458,45 +450,29 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
     _scrollToBottom();
 
     try {
-      // 2. Perform RAG query
-      final ragResults = await ragRepo.search(text, limit: 3);
-      
-      final List<Map<String, String>> citationsList = [];
-      final StringBuffer contextBuffer = StringBuffer();
-      
-      for (final res in ragResults) {
-        String title = '';
-        String textContent = '';
-        
-        if (res.type == RagSourceType.verse && res.verse != null) {
-          title = 'Surah ${_surahName(res.verse!.surahNumber)} ${res.verse!.surahNumber}:${res.verse!.ayahNumber}';
-          textContent = res.verse!.englishText;
-        } else if (res.type == RagSourceType.hadith && res.hadith != null) {
-          title = '${res.hadith!.bookName} Hadith ${res.hadith!.hadithNumber}';
-          textContent = res.hadith!.englishText;
-        } else if (res.type == RagSourceType.tafsir && res.tafsir != null) {
-          title = 'Tafsir ${_surahName(res.tafsir!.surahNumber)} ${res.tafsir!.surahNumber}:${res.tafsir!.ayahNumber}';
-          textContent = res.tafsir!.contentEnglish;
-        }
-        
-        if (title.isNotEmpty) {
-          citationsList.add({'title': title});
-          // Label included so the model can cite its source per Rules.md.
-          contextBuffer.writeln('[$title] $textContent');
-        }
-      }
+      // 2. Generate a grounded response: the LLM drafts from its own
+      // knowledge first, that draft becomes the retrieval query (HyDE),
+      // then the LLM refines its answer using the real retrieved
+      // references — see LlmService.generateGroundedResponseStream.
+      List<Map<String, String>> citationsList = [];
+      String citationsStr = '';
 
-      final citationsStr = citationsList.map((e) => e['title']!).join(' • ');
-      final ragContext = contextBuffer.toString();
-
-      // 3. Call LLM Service Stream
-      final responseStream = llmService.generateResponseStream(text, ragContext);
+      final responseStream = llmService.generateGroundedResponseStream(
+        text,
+        ragRepository: ragRepo,
+        onRetrieved: (ragResults) {
+          citationsList = [
+            for (final result in ragResults) {'title': citationFor(result).title},
+          ];
+          citationsStr = citationsList.map((c) => c['title']!).join(' • ');
+        },
+      );
       String fullAgentResponse = '';
 
       await for (final chunk in responseStream) {
         if (!mounted) return;
         fullAgentResponse += chunk;
-        
+
         setState(() {
           _messages[_messages.length - 1] = {
             'sender': 'agent',
@@ -507,7 +483,7 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
         _scrollToBottom();
       }
 
-      // 4. Save final complete agent response to database
+      // 3. Save final complete agent response to database
       await convoRepo.addMessage(
         _currentConversationId!,
         'agent',
