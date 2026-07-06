@@ -14,6 +14,17 @@ import 'build_kb.dart' as build_kb;
 ///   flutter test tool/build_kb_runner.dart --timeout=none \
 ///     --dart-define=KB_OUTPUT=path/to/kb.db --dart-define=KB_VERSION=1.0.0
 void main() {
+  // CRITICAL: without this, rootBundle has no ServicesBinding to talk to —
+  // EmbeddingService.init() throws "Binding has not yet been initialized",
+  // is caught, and silently falls back to random mock embeddings for the
+  // entire build. This was missing since this harness was first written,
+  // meaning every kb.db ever built by this project (through kb-v1.0.1)
+  // shipped with mock, not real, embeddings — confirmed empirically: a
+  // synonymous sentence pair and an unrelated pair scored nearly identical
+  // near-zero cosine similarity (0.09 vs 0.01), which is what random unit
+  // vectors produce, not what a real embedding model produces.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('build kb.db', () async {
     const output = String.fromEnvironment('KB_OUTPUT', defaultValue: 'kb.db');
     const version = String.fromEnvironment('KB_VERSION', defaultValue: '0.0.0');

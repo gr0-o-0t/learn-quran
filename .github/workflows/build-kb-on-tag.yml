@@ -40,11 +40,33 @@ jobs:
 
       - name: Build kb.db
         # `dart run` cannot host this — build_kb.dart transitively uses
-        # rootBundle (via EmbeddingService/KnowledgeBaseDatabase.openBundled),
-        # which needs Flutter engine bindings. tool/build_kb_runner.dart
-        # (added in Task 6) hosts the same, unmodified build_kb.main() under
-        # `flutter test`, which does provide them.
+        # rootBundle (via EmbeddingService), which needs Flutter engine
+        # bindings. tool/build_kb_runner.dart hosts the same, unmodified
+        # build_kb.main() under `flutter test`, which does provide them.
+        #
+        # LD_LIBRARY_PATH must point at onnxruntime's bundled .so: unlike
+        # `flutter build`, which copies it next to the compiled executable,
+        # `flutter test` runs via flutter_tester with no such bundling step,
+        # so the dynamic linker can't find `libonnxruntime.so.1.15.1` by
+        # its bare name otherwise. Without this, EmbeddingService.init()
+        # throws, is silently caught, and falls back to random mock
+        # embeddings for the entire build — confirmed to be exactly what
+        # happened for every kb.db built before this fix (kb-v1.0.0,
+        # kb-v1.0.1): retrieval was comparing semantically meaningless
+        # vectors the whole time. The package path is resolved dynamically
+        # from .dart_tool/package_config.json (populated by `flutter pub
+        # get` above) rather than hardcoding a pub-cache path, since the
+        # exact resolved onnxruntime version can change.
         run: |
+          ONNX_DIR=$(python3 -c "
+          import json
+          data = json.load(open('.dart_tool/package_config.json'))
+          for pkg in data['packages']:
+              if pkg['name'] == 'onnxruntime':
+                  print(pkg['rootUri'].replace('file://', ''))
+                  break
+          ")
+          export LD_LIBRARY_PATH="$ONNX_DIR/linux:$LD_LIBRARY_PATH"
           flutter test tool/build_kb_runner.dart --timeout=none \
             --dart-define=KB_OUTPUT=kb.db \
             --dart-define=KB_VERSION="${{ steps.version.outputs.version }}"
