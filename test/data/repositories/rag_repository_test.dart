@@ -24,14 +24,10 @@ void main() {
   late RagRepository repository;
 
   setUp(() async {
-    // We use NativeDatabase.memory() for unit testing Drift.
     db = KnowledgeBaseDatabase.forTesting(NativeDatabase.memory());
-
-    // We force mock embeddings for unit tests to avoid asset loading and ensure fast execution.
     embeddingService = EmbeddingService(forceMock: true);
     repository = RagRepository(db, embeddingService);
 
-    // Seed some initial content data.
     await db.into(db.verses).insert(VersesCompanion.insert(
           id: const drift.Value(1),
           surahNumber: 1,
@@ -52,37 +48,45 @@ void main() {
           banglaText: 'কাজ নিয়তের ওপর নির্ভরশীল...',
         ));
 
-    await db.into(db.tafsirs).insert(TafsirsCompanion.insert(
+    await db.into(db.tafsirChunks).insert(TafsirChunksCompanion.insert(
           id: const drift.Value(1),
+          tafsirId: 1,
           surahNumber: 1,
           ayahNumber: 1,
           author: 'Ibn Kathir',
+          chunkIndex: 0,
           contentEnglish: 'Tafsir explaining the meaning of Basmalah.',
-          contentBangla: 'তাসমীয়ার তাফসীর...',
         ));
 
-    // Precompute and index embeddings, as `tool/build_kb.dart` does offline.
-    await _insertVector(db, 1, await embeddingService.getEmbedding('In the name of Allah, the Entirely Merciful, the Especially Merciful.'));
-    await _insertVector(db, RagRepository.hadithOffset + 1, await embeddingService.getEmbedding('Actions are but by intention...'));
-    await _insertVector(db, RagRepository.tafsirOffset + 1, await embeddingService.getEmbedding('Tafsir explaining the meaning of Basmalah.'));
+    await _insertVector(
+      db,
+      1,
+      await embeddingService.getEmbedding('In the name of Allah, the Entirely Merciful, the Especially Merciful.'),
+    );
+    await _insertVector(
+      db,
+      RagRepository.hadithOffset + 1,
+      await embeddingService.getEmbedding('Actions are but by intention...'),
+    );
+    await _insertVector(
+      db,
+      RagRepository.tafsirOffset + 1,
+      await embeddingService.getEmbedding('Tafsir explaining the meaning of Basmalah.'),
+    );
   });
 
   tearDown(() async {
     await db.close();
   });
 
-  group('RagRepository Tests', () {
+  group('RagRepository hybrid search', () {
     test('search returns matching segments ordered by similarity', () async {
-      // Search for something related to the verse
       final results = await repository.search('name of Allah', limit: 2);
 
-      // Verify we get results
       expect(results, isNotEmpty);
       expect(results.length, lessThanOrEqualTo(2));
 
-      // Check types and properties
       for (final match in results) {
-        expect(match.score, isNotNull);
         if (match.type == RagSourceType.verse) {
           expect(match.verse, isNotNull);
           expect(match.verse!.englishText, contains('Allah'));
@@ -94,6 +98,104 @@ void main() {
           expect(match.tafsir!.contentEnglish, contains('Basmalah'));
         }
       }
+    });
+
+    test('a document found only via BM25 ranks first for an exact keyword match', () async {
+      // Its mock embedding has no special relationship to the query below —
+      // only the exact keyword match should be able to surface it reliably.
+      await db.into(db.hadiths).insert(HadithsCompanion.insert(
+            id: const drift.Value(2),
+            bookName: 'Sahih Muslim',
+            hadithNumber: '99',
+            chapterTitle: 'Zakat',
+            arabicText: 'زَكَاة',
+            englishText: 'A rare distinctive keyword: xenocryst appears here.',
+            banglaText: 'যাকাত',
+          ));
+      await _insertVector(
+        db,
+        RagRepository.hadithOffset + 2,
+        await embeddingService.getEmbedding('A rare distinctive keyword: xenocryst appears here.'),
+      );
+      await db.batch((batch) {
+        batch.insertAll(db.bm25Postings, [
+          Bm25PostingsCompanion.insert(term: 'xenocryst', docId: RagRepository.hadithOffset + 2, termFrequency: 1),
+        ]);
+        // docId is Bm25DocStats's primary key, so Drift generates it as an
+        // optional Value<int> in .insert(...) — must be wrapped, unlike the
+        // plain-int docId on Bm25Postings above (no primary key there).
+        batch.insertAll(db.bm25DocStats, [
+          Bm25DocStatsCompanion.insert(docId: drift.Value(RagRepository.hadithOffset + 2), docLength: 6),
+        ]);
+        batch.insertAll(db.kbMeta, [
+          KbMetaCompanion.insert(key: 'bm25_doc_count', value: '4'),
+          KbMetaCompanion.insert(key: 'bm25_avg_doc_length', value: '6.0'),
+        ]);
+      });
+
+      final results = await repository.search('xenocryst', limit: 1);
+
+      expect(results, hasLength(1));
+      expect(results.first.hadith?.id, 2);
+    });
+  });
+
+  group('citationFor', () {
+    test('formats a verse citation with the real surah name', () {
+      final result = RagSearchResult(
+        type: RagSourceType.verse,
+        score: 1,
+        verse: Verse(
+          id: 1,
+          surahNumber: 2,
+          ayahNumber: 153,
+          juzNumber: 2,
+          arabicText: 'عربي',
+          englishText: 'Seek help through patience.',
+          banglaText: 'বাংলা',
+        ),
+      );
+      final citation = citationFor(result);
+      expect(citation.title, 'Surah Al-Baqarah 2:153');
+      expect(citation.text, 'Seek help through patience.');
+    });
+
+    test('formats a hadith citation', () {
+      final result = RagSearchResult(
+        type: RagSourceType.hadith,
+        score: 1,
+        hadith: Hadith(
+          id: 1,
+          bookName: 'Sahih al-Bukhari',
+          hadithNumber: '1',
+          chapterTitle: 'Revelation',
+          arabicText: 'عربي',
+          englishText: 'Actions are but by intention.',
+          banglaText: 'বাংলা',
+        ),
+      );
+      final citation = citationFor(result);
+      expect(citation.title, 'Sahih al-Bukhari Hadith 1');
+      expect(citation.text, 'Actions are but by intention.');
+    });
+
+    test('formats a tafsir-chunk citation with the real surah name', () {
+      final result = RagSearchResult(
+        type: RagSourceType.tafsir,
+        score: 1,
+        tafsir: TafsirChunk(
+          id: 1,
+          tafsirId: 1,
+          surahNumber: 1,
+          ayahNumber: 1,
+          author: 'Ibn Kathir',
+          chunkIndex: 0,
+          contentEnglish: 'Commentary on the Basmalah.',
+        ),
+      );
+      final citation = citationFor(result);
+      expect(citation.title, 'Tafsir Al-Fatiha 1:1');
+      expect(citation.text, 'Commentary on the Basmalah.');
     });
   });
 }

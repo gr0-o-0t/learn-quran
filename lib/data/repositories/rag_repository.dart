@@ -1,6 +1,9 @@
+import 'dart:math';
 import 'dart:typed_data';
 import '../local/db/knowledge_base_database.dart';
 import '../../core/services/embedding_service.dart';
+import '../../core/services/bm25_index.dart';
+import '../../core/theme/quran_data.dart';
 
 enum RagSourceType { verse, hadith, tafsir }
 
@@ -9,7 +12,7 @@ class RagSearchResult {
   final double score;
   final Verse? verse;
   final Hadith? hadith;
-  final Tafsir? tafsir;
+  final TafsirChunk? tafsir;
 
   RagSearchResult({
     required this.type,
@@ -20,80 +23,195 @@ class RagSearchResult {
   });
 }
 
+/// A citation ready for display or for inclusion in an LLM prompt.
+class RagCitation {
+  final String title;
+  final String text;
+  const RagCitation({required this.title, required this.text});
+}
+
+/// English name for surah [number] (1-114), e.g. 'Al-Fatiha'. Falls back to
+/// the bare number if it's out of range (shouldn't happen with real KB data).
+String _surahName(int number) {
+  if (number < 1 || number > quranSurahs.length) return '$number';
+  return quranSurahs[number - 1]['nameEn'] as String;
+}
+
+/// Builds the citation label/text for a [RagSearchResult] — shared by the UI
+/// (citation chips, qa_agent_screen.dart) and LlmService (the "Reference
+/// material" it grounds answers in), so the two can never drift out of sync.
+RagCitation citationFor(RagSearchResult result) {
+  switch (result.type) {
+    case RagSourceType.verse:
+      final verse = result.verse!;
+      return RagCitation(
+        title: 'Surah ${_surahName(verse.surahNumber)} ${verse.surahNumber}:${verse.ayahNumber}',
+        text: verse.englishText,
+      );
+    case RagSourceType.hadith:
+      final hadith = result.hadith!;
+      return RagCitation(
+        title: '${hadith.bookName} Hadith ${hadith.hadithNumber}',
+        text: hadith.englishText,
+      );
+    case RagSourceType.tafsir:
+      final tafsir = result.tafsir!;
+      return RagCitation(
+        title: 'Tafsir ${_surahName(tafsir.surahNumber)} ${tafsir.surahNumber}:${tafsir.ayahNumber}',
+        text: tafsir.contentEnglish,
+      );
+  }
+}
+
+/// Hybrid retrieval over the offline knowledge base: fuses embedding
+/// similarity (an in-memory, SIMD-accelerated scan — see [_ensureEmbeddingCache])
+/// with BM25 keyword search ([Bm25Index]) via Reciprocal Rank Fusion.
 class RagRepository {
   final KnowledgeBaseDatabase _db;
   final EmbeddingService _embeddingService;
+  late final Bm25Index _bm25Index;
 
   static const int hadithOffset = 100000;
   static const int tafsirOffset = 200000;
+  static const int _embeddingDimensions = 384;
+  static const int _rrfK = 60;
 
-  RagRepository(this._db, this._embeddingService);
+  Float32List? _embeddingMatrix;
+  List<int>? _embeddingDocIds;
 
-  /// Performs vector similarity search. Returns top k matches.
-  Future<List<RagSearchResult>> search(String query, {int limit = 5}) async {
-    final queryVector = await _embeddingService.getEmbedding(query, isQuery: true);
+  RagRepository(this._db, this._embeddingService) {
+    _bm25Index = Bm25Index(_db);
+  }
 
-    final allRows = await _db.customSelect('SELECT rowid, embedding FROM vec_knowledge_base').get();
-    final scoredRows = <_ScoredRow>[];
+  /// Loads every stored embedding into one flat, contiguous [Float32List]
+  /// (docCount × 384) plus a parallel doc-id list, once. Replaces the old
+  /// per-query `SELECT * FROM vec_knowledge_base` (the dominant cost of the
+  /// previous implementation) — this cache lives for the repository's
+  /// lifetime, which is naturally rebuilt whenever the KB is re-downloaded
+  /// (see database_provider.dart's ref.invalidate wiring).
+  Future<void> _ensureEmbeddingCache() async {
+    if (_embeddingMatrix != null) return;
 
-    for (final row in allRows) {
-      final rowid = row.read<int>('rowid');
-      final blob = row.read<Uint8List>('embedding');
-      final floatList = Float32List.sublistView(blob);
+    final rows = await _db.customSelect('SELECT rowid, embedding FROM vec_knowledge_base').get();
+    final docIds = <int>[];
+    final matrix = Float32List(rows.length * _embeddingDimensions);
 
-      double score = 0.0;
-      final minLength = queryVector.length < floatList.length ? queryVector.length : floatList.length;
-      for (int i = 0; i < minLength; i++) {
-        score += queryVector[i] * floatList[i];
+    for (var i = 0; i < rows.length; i++) {
+      final rowid = rows[i].read<int>('rowid');
+      final blob = rows[i].read<Uint8List>('embedding');
+      final floats = Float32List.sublistView(blob);
+      docIds.add(rowid);
+      final offset = i * _embeddingDimensions;
+      final count = min(_embeddingDimensions, floats.length);
+      for (var d = 0; d < count; d++) {
+        matrix[offset + d] = floats[d];
       }
-
-      scoredRows.add(_ScoredRow(rowid, score));
     }
 
-    scoredRows.sort((a, b) => b.score.compareTo(a.score));
-    final topRows = scoredRows.take(limit);
+    _embeddingDocIds = docIds;
+    _embeddingMatrix = matrix;
+  }
+
+  /// SIMD dot product (4 floats/lane) between [queryLanes] and the doc
+  /// embedding stored at [docIndex] in [matrix]. 384 divides evenly into 96
+  /// lanes, so there's no remainder to handle separately.
+  double _dotProduct(Float32x4List queryLanes, Float32List matrix, int docIndex) {
+    final base = docIndex * _embeddingDimensions;
+    var sum = Float32x4.zero();
+    for (var lane = 0; lane < queryLanes.length; lane++) {
+      final matrixOffset = base + lane * 4;
+      final docLane = Float32x4(
+        matrix[matrixOffset],
+        matrix[matrixOffset + 1],
+        matrix[matrixOffset + 2],
+        matrix[matrixOffset + 3],
+      );
+      sum += queryLanes[lane] * docLane;
+    }
+    return sum.x + sum.y + sum.z + sum.w;
+  }
+
+  Future<List<MapEntry<int, double>>> _embeddingSearch(String query, {int limit = 20}) async {
+    await _ensureEmbeddingCache();
+    final docIds = _embeddingDocIds!;
+    final matrix = _embeddingMatrix!;
+    if (docIds.isEmpty) return const [];
+
+    final queryVector = await _embeddingService.getEmbedding(query, isQuery: true);
+    final queryFloats = Float32List.fromList(queryVector);
+    final laneCount = _embeddingDimensions ~/ 4;
+    final queryLanes = Float32x4List(laneCount);
+    for (var lane = 0; lane < laneCount; lane++) {
+      final offset = lane * 4;
+      queryLanes[lane] = Float32x4(
+        queryFloats[offset],
+        queryFloats[offset + 1],
+        queryFloats[offset + 2],
+        queryFloats[offset + 3],
+      );
+    }
+
+    final scored = <MapEntry<int, double>>[];
+    for (var i = 0; i < docIds.length; i++) {
+      scored.add(MapEntry(docIds[i], _dotProduct(queryLanes, matrix, i)));
+    }
+    scored.sort((a, b) => b.value.compareTo(a.value));
+    return scored.take(limit).toList();
+  }
+
+  /// Fuses two ranked (docId, score) lists via Reciprocal Rank Fusion —
+  /// score depends only on rank position, so BM25 scores and dot-product
+  /// scores never need to be rescaled against each other. A doc present in
+  /// only one list still accumulates a score from that list alone.
+  List<MapEntry<int, double>> _reciprocalRankFusion(
+    List<MapEntry<int, double>> a,
+    List<MapEntry<int, double>> b, {
+    required int limit,
+  }) {
+    final fused = <int, double>{};
+    for (var rank = 0; rank < a.length; rank++) {
+      final docId = a[rank].key;
+      fused[docId] = (fused[docId] ?? 0) + 1 / (_rrfK + rank + 1);
+    }
+    for (var rank = 0; rank < b.length; rank++) {
+      final docId = b[rank].key;
+      fused[docId] = (fused[docId] ?? 0) + 1 / (_rrfK + rank + 1);
+    }
+    final ranked = fused.entries.toList()..sort((x, y) => y.value.compareTo(x.value));
+    return ranked.take(limit).toList();
+  }
+
+  /// Hybrid retrieval: fuses embedding similarity with BM25 keyword search,
+  /// then hydrates the fused top-[limit] ids into full verse/hadith/
+  /// tafsir-chunk rows.
+  Future<List<RagSearchResult>> search(String query, {int limit = 5}) async {
+    final embeddingResults = await _embeddingSearch(query, limit: 20);
+    final bm25Results = await _bm25Index.search(query, limit: 20);
+    final fused = _reciprocalRankFusion(embeddingResults, bm25Results, limit: limit);
 
     final searchResults = <RagSearchResult>[];
-    for (final row in topRows) {
-      final match = await _buildSearchResult(row.rowid, row.score);
+    for (final entry in fused) {
+      final match = await _buildSearchResult(entry.key, entry.value);
       if (match.verse != null || match.hadith != null || match.tafsir != null) {
         searchResults.add(match);
       }
     }
-
     return searchResults;
   }
 
   Future<RagSearchResult> _buildSearchResult(int rowid, double score) async {
     if (rowid < hadithOffset) {
       final verse = await (_db.select(_db.verses)..where((t) => t.id.equals(rowid))).getSingleOrNull();
-      return RagSearchResult(
-        type: RagSourceType.verse,
-        score: score,
-        verse: verse,
-      );
+      return RagSearchResult(type: RagSourceType.verse, score: score, verse: verse);
     } else if (rowid >= hadithOffset && rowid < tafsirOffset) {
       final hadithId = rowid - hadithOffset;
       final hadith = await (_db.select(_db.hadiths)..where((t) => t.id.equals(hadithId))).getSingleOrNull();
-      return RagSearchResult(
-        type: RagSourceType.hadith,
-        score: score,
-        hadith: hadith,
-      );
+      return RagSearchResult(type: RagSourceType.hadith, score: score, hadith: hadith);
     } else {
-      final tafsirId = rowid - tafsirOffset;
-      final tafsir = await (_db.select(_db.tafsirs)..where((t) => t.id.equals(tafsirId))).getSingleOrNull();
-      return RagSearchResult(
-        type: RagSourceType.tafsir,
-        score: score,
-        tafsir: tafsir,
-      );
+      final tafsirChunkId = rowid - tafsirOffset;
+      final tafsirChunk =
+          await (_db.select(_db.tafsirChunks)..where((t) => t.id.equals(tafsirChunkId))).getSingleOrNull();
+      return RagSearchResult(type: RagSourceType.tafsir, score: score, tafsir: tafsirChunk);
     }
   }
-}
-
-class _ScoredRow {
-  final int rowid;
-  final double score;
-  _ScoredRow(this.rowid, this.score);
 }
