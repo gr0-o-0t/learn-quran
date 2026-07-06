@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'build_kb.dart' as build_kb;
 
@@ -26,6 +27,17 @@ void main() {
   // meaningful gap) once this fix and the LD_LIBRARY_PATH fix in
   // .github/workflows/build-kb-on-tag.yml were both in place.
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // TestWidgetsFlutterBinding installs a fake HttpOverrides that makes every
+  // dart:io HttpClient request return a fake 400 with no real network call —
+  // a deliberate safety feature for widget tests, but this script's whole
+  // job is fetching real Quran/Hadith/Tafsir content over HTTP. Confirmed
+  // empirically: without this line, build_kb.dart's first live request
+  // fails with FormatException ("Unexpected end of input") trying to
+  // jsonDecode an empty 400 body. Clearing the override restores real
+  // network I/O without touching the ServicesBinding/rootBundle wiring
+  // above (HttpOverrides is unrelated to that).
+  HttpOverrides.global = null;
 
   test('build kb.db', () async {
     const output = String.fromEnvironment('KB_OUTPUT', defaultValue: 'kb.db');

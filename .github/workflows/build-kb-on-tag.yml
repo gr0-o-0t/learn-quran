@@ -75,9 +75,21 @@ jobs:
             exit 1
           }
           export LD_LIBRARY_PATH="$ONNX_DIR/linux:$LD_LIBRARY_PATH"
+          # Surface the actual failure as a GitHub annotation (visible via
+          # the public checks API without a token) rather than only the
+          # generic "0 tests passed, 1 failed" summary GitHub emits itself —
+          # that summary alone gives no way to diagnose a CI-only failure.
+          set +e
           flutter test tool/build_kb_runner.dart --timeout=none \
             --dart-define=KB_OUTPUT=kb.db \
-            --dart-define=KB_VERSION="${{ steps.version.outputs.version }}"
+            --dart-define=KB_VERSION="${{ steps.version.outputs.version }}" 2>&1 | tee test_output.log
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+            ERR_TEXT=$(tail -c 4000 test_output.log | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error::build_kb failed (exit $TEST_EXIT_CODE): $ERR_TEXT"
+            exit "$TEST_EXIT_CODE"
+          fi
 
       - name: Compute checksum and size
         run: |
