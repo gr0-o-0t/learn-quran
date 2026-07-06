@@ -63,4 +63,31 @@ void main() {
     expect(hadith.bookName, 'Sahih al-Bukhari');
     expect(tafsir.author, 'Ibn Kathir');
   });
+
+  test('creates tafsir_chunks/bm25_postings/bm25_doc_stats tables', () async {
+    await db.into(db.tafsirChunks).insert(TafsirChunksCompanion.insert(
+          id: const Value(1),
+          tafsirId: 1,
+          surahNumber: 1,
+          ayahNumber: 1,
+          author: 'Ibn Kathir',
+          chunkIndex: 0,
+          contentEnglish: 'First chunk of commentary.',
+        ));
+    final chunk = await (db.select(db.tafsirChunks)..where((t) => t.id.equals(1))).getSingle();
+    expect(chunk.contentEnglish, 'First chunk of commentary.');
+
+    await db.into(db.bm25Postings).insert(
+          Bm25PostingsCompanion.insert(term: 'patience', docId: 1, termFrequency: 2),
+        );
+    final posting = await (db.select(db.bm25Postings)..where((t) => t.term.equals('patience'))).getSingle();
+    expect(posting.docId, 1);
+    expect(posting.termFrequency, 2);
+
+    await db.into(db.bm25DocStats).insert(
+          Bm25DocStatsCompanion.insert(docId: const Value(1), docLength: 42),
+        );
+    final stats = await (db.select(db.bm25DocStats)..where((t) => t.docId.equals(1))).getSingle();
+    expect(stats.docLength, 42);
+  });
 }

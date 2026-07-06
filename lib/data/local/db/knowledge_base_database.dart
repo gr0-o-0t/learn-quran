@@ -50,7 +50,34 @@ class KbMeta extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Verses, Hadiths, Tafsirs, KbMeta])
+class TafsirChunks extends Table {
+  IntColumn get id => integer()();
+  IntColumn get tafsirId => integer()();
+  IntColumn get surahNumber => integer()();
+  IntColumn get ayahNumber => integer()();
+  TextColumn get author => text()();
+  IntColumn get chunkIndex => integer()();
+  TextColumn get contentEnglish => text()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Bm25Postings extends Table {
+  TextColumn get term => text()();
+  IntColumn get docId => integer()();
+  IntColumn get termFrequency => integer()();
+}
+
+class Bm25DocStats extends Table {
+  IntColumn get docId => integer()();
+  IntColumn get docLength => integer()();
+
+  @override
+  Set<Column> get primaryKey => {docId};
+}
+
+@DriftDatabase(tables: [Verses, Hadiths, Tafsirs, KbMeta, TafsirChunks, Bm25Postings, Bm25DocStats])
 class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
   KnowledgeBaseDatabase.forTesting(super.executor);
 
@@ -60,16 +87,18 @@ class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
   KnowledgeBaseDatabase.fromFile(String path) : super(NativeDatabase.createInBackground(File(path)));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
           await _createVectorTable();
+          await _createBm25TermIndex();
         },
         beforeOpen: (details) async {
           await _createVectorTable();
+          await _createBm25TermIndex();
         },
       );
 
@@ -84,5 +113,11 @@ class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
         embedding BLOB
       );
     ''');
+  }
+
+  Future<void> _createBm25TermIndex() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_bm25_postings_term ON bm25_postings (term);',
+    );
   }
 }
