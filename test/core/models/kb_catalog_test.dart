@@ -9,7 +9,7 @@ void main() {
   });
 
   test('kCurrentKb.sizeBytes is filled in with the real published size', () {
-    expect(kCurrentKb.sizeBytes, 259268608);
+    expect(kCurrentKb.sizeBytes, 536846336);
   });
 
   test('kCurrentKb.sha256 is a well-formed, correct 64-char lowercase hex digest', () {
@@ -17,7 +17,7 @@ void main() {
     expect(kCurrentKb.sha256, matches(RegExp(r'^[0-9a-f]{64}$')));
     expect(
       kCurrentKb.sha256,
-      '517dffad618e75fa226a471e873cdd5a1f7fc46d78b7c7025760cf1d4803246b',
+      '8d189e81b8cf87840f6d538b0e5f75ba9a069b19924a89e66fc35b72c8f54b36',
     );
   });
 }

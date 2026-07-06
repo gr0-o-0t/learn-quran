@@ -17,13 +17,16 @@ class KbInfo {
 }
 
 /// The current knowledge base version the app knows how to fetch.
-/// Verified against the real kb-v1.0.1 GitHub Release (2026-07-05):
-/// size 259268608 bytes, sha256 517dffad618e75fa226a471e873cdd5a1f7fc46d78b7c7025760cf1d4803246b.
-/// v1.0.1 drops the ~212 hadith rows with no upstream English text that
-/// v1.0.0 shipped with blank englishText (see tool/build_kb.dart).
+/// Verified against the real kb-v1.1.0 GitHub Release (2026-07-06):
+/// size 536846336 bytes, sha256 8d189e81b8cf87840f6d538b0e5f75ba9a069b19924a89e66fc35b72c8f54b36.
+/// v1.1.0 is the first release built with real BGE embeddings (all prior
+/// releases, including v1.0.1, shipped with random mock embeddings due to
+/// a build-harness bug — see tool/build_kb_runner.dart), and adds chunked
+/// tafsir plus a precomputed BM25 index for hybrid retrieval
+/// (see lib/data/repositories/rag_repository.dart).
 const KbInfo kCurrentKb = KbInfo(
-  version: '1.0.1',
+  version: '1.1.0',
   filename: 'kb.db',
-  sizeBytes: 259268608,
-  sha256: '517dffad618e75fa226a471e873cdd5a1f7fc46d78b7c7025760cf1d4803246b',
+  sizeBytes: 536846336,
+  sha256: '8d189e81b8cf87840f6d538b0e5f75ba9a069b19924a89e66fc35b72c8f54b36',
 );
