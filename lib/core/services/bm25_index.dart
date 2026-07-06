@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'package:drift/drift.dart';
 import '../../data/local/db/knowledge_base_database.dart';
 import '../utils/bm25_tokenizer.dart';
 
