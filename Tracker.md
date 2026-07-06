@@ -203,3 +203,40 @@ This file is updated dynamically to reflect the completion status of all tasks.
     Deferred — separate design discussion, per the knowledge-base-v1 design doc's Decision Log.
 *   [ ] **Task 12.4:** Root-cause why `sqlite-vec`/`vec0` doesn't load natively in this environment, and fix it if a real device/CI matrix shows the same failure.
     Newly discovered, not previously tracked. Not blocking — the Dart-side fallback search already works and is what Task 12.1 built against.
+
+### Phase 13: Hybrid RAG Retrieval, Tafsir Chunking & Generate-Retrieve-Refine (2026-07-06)
+*   [x] **Task 13.1:** Chunk long tafsir entries, add a precomputed BM25 keyword index alongside embeddings, fuse both via Reciprocal Rank Fusion, and switch the Q&A flow to generate-retrieve-refine (LLM drafts from its own knowledge first, then RAG-grounded refinement of the original question).
+    See design: [docs/superpowers/specs/2026-07-06-rag-hybrid-retrieval-design.md](docs/superpowers/specs/2026-07-06-rag-hybrid-retrieval-design.md)
+    and plan: [docs/superpowers/plans/2026-07-06-rag-hybrid-retrieval.md](docs/superpowers/plans/2026-07-06-rag-hybrid-retrieval.md).
+    New `TafsirChunks` table (sentence-boundary-aware, ~200-token chunks,
+    no overlap) plus `Bm25Postings`/`Bm25DocStats` tables computed at
+    build time; `RagRepository.search()` now fuses an embedding top-20 and
+    a BM25 top-20 via RRF (k=60), with an in-memory `Float32x4`-SIMD
+    embedding cache built once instead of re-reading the whole table per
+    query. `LlmService.generateGroundedResponseStream()` runs a short
+    (~150-token) hidden own-knowledge draft, uses it as the retrieval
+    query (HyDE-style), then always refines the original question against
+    the retrieved context.
+    A major previously-undiscovered bug was found and fixed along the way:
+    `tool/build_kb_runner.dart` was missing
+    `TestWidgetsFlutterBinding.ensureInitialized()`, so `rootBundle`
+    threw and `EmbeddingService` silently fell back to random mock
+    embeddings for the ONNX model load — meaning **every kb.db this
+    project had ever built, including the live kb-v1.0.1, shipped with
+    meaningless mock embeddings**, not real ones. This is very likely the
+    true root cause of the original "Q&A always says it has no local
+    source" bug report that started this round of work. Fixing it exposed
+    a second bug: the same binding also installs a fake `HttpOverrides`
+    that blocks all real `dart:io` HTTP requests, breaking
+    `build_kb.dart`'s live Quran/Hadith/Tafsir API fetches — fixed with
+    `HttpOverrides.global = null` right after the binding init.
+    Publishing `kb-v1.1.0` (the first real-embeddings release) took three
+    tag attempts: the first two failed in CI for variants of the
+    `HttpOverrides` issue (the second time because the local fix had been
+    verified but never actually committed before tagging); the third
+    succeeded. Real values verified via the GitHub API: size 536846336
+    bytes, sha256
+    8d189e81b8cf87840f6d538b0e5f75ba9a069b19924a89e66fc35b72c8f54b36,
+    wired into `kb_catalog.dart`. 76,707 total indexed documents (6,236
+    verses, 14,940 hadiths, 55,531 tafsir chunks), 3,513,028 BM25
+    postings.
