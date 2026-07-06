@@ -139,7 +139,7 @@ class RagRepository {
 
     final queryVector = await _embeddingService.getEmbedding(query, isQuery: true);
     final queryFloats = Float32List.fromList(queryVector);
-    final laneCount = _embeddingDimensions ~/ 4;
+    const laneCount = _embeddingDimensions ~/ 4;
     final queryLanes = Float32x4List(laneCount);
     for (var lane = 0; lane < laneCount; lane++) {
       final offset = lane * 4;

@@ -125,7 +125,7 @@ void main() {
         // optional Value<int> in .insert(...) — must be wrapped, unlike the
         // plain-int docId on Bm25Postings above (no primary key there).
         batch.insertAll(db.bm25DocStats, [
-          Bm25DocStatsCompanion.insert(docId: drift.Value(RagRepository.hadithOffset + 2), docLength: 6),
+          Bm25DocStatsCompanion.insert(docId: const drift.Value(RagRepository.hadithOffset + 2), docLength: 6),
         ]);
         batch.insertAll(db.kbMeta, [
           KbMetaCompanion.insert(key: 'bm25_doc_count', value: '4'),
@@ -145,7 +145,7 @@ void main() {
       final result = RagSearchResult(
         type: RagSourceType.verse,
         score: 1,
-        verse: Verse(
+        verse: const Verse(
           id: 1,
           surahNumber: 2,
           ayahNumber: 153,
@@ -164,7 +164,7 @@ void main() {
       final result = RagSearchResult(
         type: RagSourceType.hadith,
         score: 1,
-        hadith: Hadith(
+        hadith: const Hadith(
           id: 1,
           bookName: 'Sahih al-Bukhari',
           hadithNumber: '1',
@@ -183,7 +183,7 @@ void main() {
       final result = RagSearchResult(
         type: RagSourceType.tafsir,
         score: 1,
-        tafsir: TafsirChunk(
+        tafsir: const TafsirChunk(
           id: 1,
           tafsirId: 1,
           surahNumber: 1,
