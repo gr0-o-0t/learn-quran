@@ -2,18 +2,34 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:llamadart/llamadart.dart';
 import '../../data/repositories/user_repository.dart';
+import '../../data/repositories/rag_repository.dart';
 import '../providers/repository_providers.dart';
 import '../models/model_catalog.dart';
 import 'model_download_service.dart';
 
+/// Resolves a model, loads it if needed, and streams a chat completion — or
+/// returns null if no model is available. Overridable for testing: the real
+/// default resolves+loads the actual llama.cpp engine, which needs a real
+/// multi-GB GGUF file no test environment has, so tests inject a fake that
+/// never touches llamadart at all.
+typedef ChatOrNullFn = Future<Stream<String>?> Function(
+  String systemPrompt,
+  String userPrompt,
+  int maxTokens,
+);
+
 class LlmService {
   final UserRepository? _userRepo;
   final ModelDownloadService _downloadService;
+  final ChatOrNullFn? _chatOverride;
   LlamaEngine? _engine;
   String? _loadedModelPath;
 
-  LlmService([this._userRepo, ModelDownloadService? downloadService])
-      : _downloadService = downloadService ?? ModelDownloadService();
+  LlmService([this._userRepo, ModelDownloadService? downloadService, ChatOrNullFn? chatOverride])
+      : _downloadService = downloadService ?? ModelDownloadService(),
+        _chatOverride = chatOverride;
+
+  ChatOrNullFn get _chat => _chatOverride ?? _defaultChatOrNull;
 
   /// Resolves the user's selected model (or the RAM-based recommendation if
   /// nothing's been explicitly selected), then returns its local file path
@@ -93,6 +109,30 @@ class LlmService {
     }
   }
 
+  Future<Stream<String>?> _defaultChatOrNull(String systemPrompt, String userPrompt, int maxTokens) async {
+    final modelPath = await getSelectedModelPath();
+    final engine = modelPath == null ? null : await _ensureEngine(modelPath);
+    if (engine == null) return null;
+    return _streamChat(engine, systemPrompt, userPrompt, maxTokens);
+  }
+
+  Stream<String> _streamChat(LlamaEngine engine, String systemPrompt, String userPrompt, int maxTokens) async* {
+    final messages = [
+      LlamaChatMessage.fromText(role: LlamaChatRole.system, text: systemPrompt),
+      LlamaChatMessage.fromText(role: LlamaChatRole.user, text: userPrompt),
+    ];
+    final responseStream = engine.create(
+      messages,
+      params: GenerationParams(maxTokens: maxTokens, temp: 0.7, topP: 0.9),
+    );
+    await for (final chunk in responseStream) {
+      final text = chunk.choices.isNotEmpty ? chunk.choices.first.delta.content : null;
+      if (text != null && text.isNotEmpty) {
+        yield text;
+      }
+    }
+  }
+
   /// Releases the loaded model's native resources. Call when the owning
   /// provider is disposed (app teardown / hot restart).
   Future<void> dispose() async {
@@ -101,11 +141,14 @@ class LlmService {
     _loadedModelPath = null;
   }
 
+  /// Single-pass generation: streams a response for [prompt], grounded in
+  /// [ragContext] if non-empty. Falls back to a hardcoded mock response if
+  /// no model is downloaded/loaded. Used directly by DailyStoryService (no
+  /// RAG involved there) and as the final "refine" pass of
+  /// [generateGroundedResponseStream].
   Stream<String> generateResponseStream(String prompt, String ragContext) async* {
-    final modelPath = await getSelectedModelPath();
-    final engine = modelPath == null ? null : await _ensureEngine(modelPath);
-
-    if (engine == null) {
+    final chatStream = await _chat(_systemPrompt(ragContext), prompt, 512);
+    if (chatStream == null) {
       final responseText = _generateMockResponse(prompt, ragContext);
       final words = responseText.split(' ');
       for (final word in words) {
@@ -114,23 +157,58 @@ class LlmService {
       }
       return;
     }
+    yield* chatStream;
+  }
 
-    final messages = [
-      LlamaChatMessage.fromText(role: LlamaChatRole.system, text: _systemPrompt(ragContext)),
-      LlamaChatMessage.fromText(role: LlamaChatRole.user, text: prompt),
-    ];
+  static const _draftSystemPrompt =
+      'You are a gentle, respectful Islamic teaching companion. Answer the '
+      'question briefly and naturally from your own general knowledge — you '
+      'do not need to cite sources or worry about accuracy for this answer.';
 
-    final responseStream = engine.create(
-      messages,
-      params: const GenerationParams(maxTokens: 512, temp: 0.7, topP: 0.9),
-    );
-
-    await for (final chunk in responseStream) {
-      final text = chunk.choices.isNotEmpty ? chunk.choices.first.delta.content : null;
-      if (text != null && text.isNotEmpty) {
-        yield text;
+  /// Two-pass, RAG-grounded generation for the Q&A screen:
+  /// 1. A short, hidden draft answer from the model's own knowledge (HyDE —
+  ///    a hypothetical answer retrieves better than the raw question).
+  /// 2. Hybrid retrieval ([ragRepository.search]) using that draft as the
+  ///    query.
+  /// 3. The same single-pass [generateResponseStream] as the final "refine"
+  ///    pass, grounded in the retrieved references and answering the
+  ///    original [question] — never the draft.
+  ///
+  /// Degrades gracefully: if no model is available, [_chat] returns null for
+  /// the draft, so retrieval runs on the raw [question] and
+  /// [generateResponseStream] falls through to its own existing mock path —
+  /// no special-casing needed here. If the draft pass throws for any other
+  /// reason, retrieval also falls back to the raw [question].
+  Stream<String> generateGroundedResponseStream(
+    String question, {
+    required RagRepository ragRepository,
+    void Function(List<RagSearchResult> ragResults)? onRetrieved,
+  }) async* {
+    var retrievalQuery = question;
+    try {
+      final draftStream = await _chat(_draftSystemPrompt, question, 150);
+      if (draftStream != null) {
+        final draft = (await draftStream.join()).trim();
+        if (draft.isNotEmpty) retrievalQuery = draft;
       }
+    } catch (_) {
+      // Fall back to the raw question as the retrieval query.
     }
+
+    final ragResults = await ragRepository.search(retrievalQuery, limit: 5);
+    onRetrieved?.call(ragResults);
+    final ragContext = _buildRagContext(ragResults);
+
+    yield* generateResponseStream(question, ragContext);
+  }
+
+  String _buildRagContext(List<RagSearchResult> results) {
+    final buffer = StringBuffer();
+    for (final result in results) {
+      final citation = citationFor(result);
+      buffer.writeln('[${citation.title}] ${citation.text}');
+    }
+    return buffer.toString();
   }
 
   /// Encodes Rules.md's theological/AI generation rules (Sunnah Teaching

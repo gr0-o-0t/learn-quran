@@ -6,6 +6,9 @@ import 'package:learn_quran/data/repositories/user_repository.dart';
 import 'package:learn_quran/core/services/llm_service.dart';
 import 'package:learn_quran/core/services/model_download_service.dart';
 import 'package:learn_quran/core/models/model_catalog.dart';
+import 'package:learn_quran/data/local/db/knowledge_base_database.dart';
+import 'package:learn_quran/data/repositories/rag_repository.dart';
+import 'package:learn_quran/core/services/embedding_service.dart';
 
 /// Creates a sparse file of exactly [model.sizeBytes] length, without
 /// writing real content — real Gemma 4 sizes are multi-gigabyte, so
@@ -15,6 +18,22 @@ Future<void> _createFakeDownloadedFile(Directory dir, ModelInfo model) async {
   final raf = await File('${dir.path}/${model.filename}').open(mode: FileMode.write);
   await raf.truncate(model.sizeBytes);
   await raf.close();
+}
+
+/// A RagRepository test double that records every query it's asked to
+/// search, without touching a real database — used to verify
+/// generateGroundedResponseStream picks the right retrieval query (the
+/// draft, or the raw question on draft failure) without depending on
+/// embedding-similarity behavior.
+class _RecordingRagRepository extends RagRepository {
+  final List<String> queries = [];
+  _RecordingRagRepository(super._db, super._embeddingService);
+
+  @override
+  Future<List<RagSearchResult>> search(String query, {int limit = 5}) async {
+    queries.add(query);
+    return const [];
+  }
 }
 
 void main() {
@@ -91,6 +110,112 @@ void main() {
 
       expect(fullResponse, contains('As-Salamu Alaykum'));
       expect(fullResponse, contains('honesty is salvation'));
+    });
+  });
+
+  group('LlmService.generateGroundedResponseStream', () {
+    late KnowledgeBaseDatabase kbDb;
+    late EmbeddingService embeddingService;
+
+    setUp(() {
+      kbDb = KnowledgeBaseDatabase.forTesting(NativeDatabase.memory());
+      embeddingService = EmbeddingService(forceMock: true);
+    });
+
+    tearDown(() async {
+      await kbDb.close();
+    });
+
+    test('with no chat override (no model downloaded), retrieves on the raw question and streams the mock response', () async {
+      final llm = LlmService(userRepo, downloadService);
+      final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
+
+      final stream = llm.generateGroundedResponseStream(
+        'What does the Quran say about patience?',
+        ragRepository: recordingRepo,
+      );
+      final response = await stream.join();
+
+      expect(recordingRepo.queries, ['What does the Quran say about patience?']);
+      expect(response, contains('As-Salamu Alaykum'));
+    });
+
+    test('with a chat override, retrieval uses the drafted text (HyDE), not the raw question', () async {
+      final calls = <int>[];
+      Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
+        calls.add(maxTokens);
+        if (maxTokens == 150) return Stream.value('a hypothetical draft answer');
+        return Stream.value('Final grounded answer.');
+      }
+      final llm = LlmService(userRepo, downloadService, chatOverride);
+      final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
+
+      final stream = llm.generateGroundedResponseStream(
+        'the original question',
+        ragRepository: recordingRepo,
+      );
+      final response = await stream.join();
+
+      expect(calls, [150, 512]);
+      expect(recordingRepo.queries, ['a hypothetical draft answer']);
+      expect(response, 'Final grounded answer.');
+    });
+
+    test('falls back to the raw question for retrieval if the draft pass throws', () async {
+      Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
+        if (maxTokens == 150) throw Exception('simulated draft failure');
+        return Stream.value('Final grounded answer.');
+      }
+      final llm = LlmService(userRepo, downloadService, chatOverride);
+      final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
+
+      final stream = llm.generateGroundedResponseStream(
+        'the original question',
+        ragRepository: recordingRepo,
+      );
+      final response = await stream.join();
+
+      expect(recordingRepo.queries, ['the original question']);
+      expect(response, 'Final grounded answer.');
+    });
+
+    test('the refine pass always answers the original question, never the draft', () async {
+      final capturedUserPrompts = <String>[];
+      Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
+        capturedUserPrompts.add(userPrompt);
+        if (maxTokens == 150) return Stream.value('a hypothetical draft answer');
+        return Stream.value('Final grounded answer.');
+      }
+      final llm = LlmService(userRepo, downloadService, chatOverride);
+      final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
+
+      final stream = llm.generateGroundedResponseStream(
+        'the original question',
+        ragRepository: recordingRepo,
+      );
+      await stream.join();
+
+      expect(capturedUserPrompts, ['the original question', 'the original question']);
+    });
+
+    test('onRetrieved fires with the results generateGroundedResponseStream retrieved', () async {
+      Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
+        if (maxTokens == 150) return Stream.value('draft');
+        return Stream.value('answer');
+      }
+      final llm = LlmService(userRepo, downloadService, chatOverride);
+      final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
+      List<RagSearchResult>? retrieved;
+
+      final stream = llm.generateGroundedResponseStream(
+        'question',
+        ragRepository: recordingRepo,
+        onRetrieved: (results) => retrieved = results,
+      );
+      await stream.join();
+
+      expect(retrieved, isNotNull);
+      expect(retrieved, isEmpty); // _RecordingRagRepository always returns const []
     });
   });
 }
