@@ -140,6 +140,7 @@ Future<void> _fetchAndInsertTafsir(
   var chunkId = 1;
   var totalChunks = 0;
   var totalEntries = 0;
+  var splitEntries = 0;
 
   for (var surahNumber = 1; surahNumber <= 114; surahNumber++) {
     final englishResponse =
@@ -166,6 +167,7 @@ Future<void> _fetchAndInsertTafsir(
       );
       totalEntries++;
       totalChunks += chunks.length;
+      if (chunks.length > 1) splitEntries++;
       for (var chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
         await db.into(db.tafsirChunks).insert(TafsirChunksCompanion.insert(
               id: Value(chunkId),
@@ -184,7 +186,7 @@ Future<void> _fetchAndInsertTafsir(
   }
 
   stdout.writeln('  Tafsir: $totalEntries entries -> $totalChunks chunks '
-      '(${totalChunks - totalEntries} entries split into multiple chunks)');
+      '($splitEntries entries split into multiple chunks)');
 }
 
 /// Embeds every verse/hadith/tafsir-chunk's English text into
