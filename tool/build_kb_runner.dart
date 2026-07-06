@@ -21,8 +21,10 @@ void main() {
   // meaning every kb.db ever built by this project (through kb-v1.0.1)
   // shipped with mock, not real, embeddings — confirmed empirically: a
   // synonymous sentence pair and an unrelated pair scored nearly identical
-  // near-zero cosine similarity (0.09 vs 0.01), which is what random unit
-  // vectors produce, not what a real embedding model produces.
+  // near-zero cosine similarity (0.0895 vs 0.0996 — no meaningful gap,
+  // consistent with random unit vectors), versus 0.756 vs 0.399 (a large,
+  // meaningful gap) once this fix and the LD_LIBRARY_PATH fix in
+  // .github/workflows/build-kb-on-tag.yml were both in place.
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('build kb.db', () async {

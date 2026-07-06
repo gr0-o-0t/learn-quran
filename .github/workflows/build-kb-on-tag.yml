@@ -59,13 +59,21 @@ jobs:
         # exact resolved onnxruntime version can change.
         run: |
           ONNX_DIR=$(python3 -c "
-          import json
+          import json, sys
           data = json.load(open('.dart_tool/package_config.json'))
           for pkg in data['packages']:
               if pkg['name'] == 'onnxruntime':
                   print(pkg['rootUri'].replace('file://', ''))
-                  break
+                  sys.exit(0)
+          sys.exit('onnxruntime not found in .dart_tool/package_config.json')
           ")
+          # Fail loudly rather than silently building with mock embeddings
+          # a third time: if the package lookup above ever finds nothing to
+          # print, ONNX_DIR is empty and the .so genuinely won't be there.
+          test -f "$ONNX_DIR/linux/libonnxruntime.so.1.15.1" || {
+            echo "::error::libonnxruntime.so.1.15.1 not found at '$ONNX_DIR/linux' — refusing to build with silently-mocked embeddings."
+            exit 1
+          }
           export LD_LIBRARY_PATH="$ONNX_DIR/linux:$LD_LIBRARY_PATH"
           flutter test tool/build_kb_runner.dart --timeout=none \
             --dart-define=KB_OUTPUT=kb.db \
