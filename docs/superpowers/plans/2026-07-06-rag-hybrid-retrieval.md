@@ -353,12 +353,14 @@ Modify `test/data/local/db/knowledge_base_database_test.dart` — add a new test
     expect(posting.termFrequency, 2);
 
     await db.into(db.bm25DocStats).insert(
-          Bm25DocStatsCompanion.insert(docId: 1, docLength: 42),
+          Bm25DocStatsCompanion.insert(docId: const Value(1), docLength: 42),
         );
     final stats = await (db.select(db.bm25DocStats)..where((t) => t.docId.equals(1))).getSingle();
     expect(stats.docLength, 42);
   });
 ```
+
+Note: `docId` is `Bm25DocStats`'s primary key, so Drift generates it as an optional `Value<int>` in `.insert(...)` (same shape as `TafsirChunks.id` above) — it must be wrapped in `const Value(...)`, not passed as a bare `int`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -389,6 +391,7 @@ git commit -m "feat(kb): add tafsir_chunks and BM25 tables to the knowledge base
 Create `test/core/services/bm25_index_test.dart`:
 
 ```dart
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:learn_quran/core/services/bm25_index.dart';
@@ -407,6 +410,10 @@ void main() {
     //   doc 1: "patience patience prophet"
     //   doc 2: "prophet prophet prophet"
     //   doc 3: "prayer prayer prayer"
+    // docId is Bm25DocStats's primary key, so Drift generates it as an
+    // optional Value<int> in .insert(...) — it must be wrapped in
+    // const Value(...), not passed as a bare int (Bm25Postings has no
+    // primary key column, so its docId stays a plain int there).
     await db.batch((batch) {
       batch.insertAll(db.bm25Postings, [
         Bm25PostingsCompanion.insert(term: 'patience', docId: 1, termFrequency: 2),
@@ -415,9 +422,9 @@ void main() {
         Bm25PostingsCompanion.insert(term: 'prayer', docId: 3, termFrequency: 3),
       ]);
       batch.insertAll(db.bm25DocStats, [
-        Bm25DocStatsCompanion.insert(docId: 1, docLength: 3),
-        Bm25DocStatsCompanion.insert(docId: 2, docLength: 3),
-        Bm25DocStatsCompanion.insert(docId: 3, docLength: 3),
+        Bm25DocStatsCompanion.insert(docId: const Value(1), docLength: 3),
+        Bm25DocStatsCompanion.insert(docId: const Value(2), docLength: 3),
+        Bm25DocStatsCompanion.insert(docId: const Value(3), docLength: 3),
       ]);
       batch.insertAll(db.kbMeta, [
         KbMetaCompanion.insert(key: 'bm25_doc_count', value: '3'),
@@ -683,8 +690,11 @@ void main() {
         batch.insertAll(db.bm25Postings, [
           Bm25PostingsCompanion.insert(term: 'xenocryst', docId: RagRepository.hadithOffset + 2, termFrequency: 1),
         ]);
+        // docId is Bm25DocStats's primary key, so Drift generates it as an
+        // optional Value<int> in .insert(...) — must be wrapped, unlike the
+        // plain-int docId on Bm25Postings above (no primary key there).
         batch.insertAll(db.bm25DocStats, [
-          Bm25DocStatsCompanion.insert(docId: RagRepository.hadithOffset + 2, docLength: 6),
+          Bm25DocStatsCompanion.insert(docId: drift.Value(RagRepository.hadithOffset + 2), docLength: 6),
         ]);
         batch.insertAll(db.kbMeta, [
           KbMetaCompanion.insert(key: 'bm25_doc_count', value: '4'),
@@ -1194,9 +1204,12 @@ Future<void> _embedAndIndex(KnowledgeBaseDatabase db, EmbeddingService embedding
           Bm25PostingsCompanion.insert(term: termEntry.key, docId: docId, termFrequency: termEntry.value),
         );
       }
+      // docId is Bm25DocStats's primary key, so Drift generates it as an
+      // optional Value<int> in .insert(...) — must be wrapped, unlike the
+      // plain-int docId on Bm25Postings above (no primary key there).
       batch.insert(
         db.bm25DocStats,
-        Bm25DocStatsCompanion.insert(docId: docId, docLength: docLengths[docId]!),
+        Bm25DocStatsCompanion.insert(docId: Value(docId), docLength: docLengths[docId]!),
       );
     }
   });
