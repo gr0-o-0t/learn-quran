@@ -117,6 +117,22 @@ class EmbeddingService {
     }
   }
 
+  /// Synchronous, exact token count for [text] using the already-loaded
+  /// tokenizer — callers MUST call [init] first (throws otherwise). Used by
+  /// tool/build_kb.dart's tafsir chunker, which needs precise token counts
+  /// in a tight, non-async loop rather than a word-count approximation.
+  /// Adds 2 for the [CLS]/[SEP] special tokens `getEmbedding` also adds, so
+  /// the count matches the real sequence length fed to the model.
+  int countTokensSync(String text) {
+    if (!_initialized) {
+      throw StateError('EmbeddingService.countTokensSync called before init()');
+    }
+    if (_useMock) {
+      return text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length + 2;
+    }
+    return _tokenizer!.tokenize(text).length + 2;
+  }
+
   List<double> _normalize(List<double> vector) {
     double sumOfSquares = 0.0;
     for (final val in vector) {
