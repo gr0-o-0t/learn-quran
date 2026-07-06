@@ -67,5 +67,18 @@ void main() {
       expect(results, isEmpty);
       await freshDb.close();
     });
+
+    test('returns an empty list when the BM25 tables have been dropped entirely (simulating an older kb.db)',
+        () async {
+      // setUp already seeded valid doc-count/avg-length metadata, so
+      // search() gets past its early-return checks and actually reaches the
+      // postings/doc-stats queries below — those are what throw once the
+      // tables are gone.
+      await db.customStatement('DROP TABLE bm25_postings');
+      await db.customStatement('DROP TABLE bm25_doc_stats');
+
+      final results = await index.search('patience');
+      expect(results, isEmpty);
+    });
   });
 }

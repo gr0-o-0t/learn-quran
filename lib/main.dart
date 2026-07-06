@@ -24,7 +24,7 @@ Future<void> main() async {
   // reconnected instead of silently orphaned.
   unawaited(FileDownloader().start());
   final kbPath = await KbDownloadService().localPathFor(kCurrentKb);
-  KnowledgeBaseDatabase? initialKnowledgeBaseDatabase = await _openKnowledgeBaseDatabaseSafely(kbPath);
+  KnowledgeBaseDatabase? initialKnowledgeBaseDatabase = await openKnowledgeBaseDatabaseSafely(kbPath);
   // Best-effort: never let background-alarm setup delay or block app startup.
   unawaited(_scheduleBackgroundPrayerWorker());
   runApp(
@@ -46,37 +46,6 @@ Future<void> main() async {
       child: const LearnQuranApp(),
     ),
   );
-}
-
-/// Opens the knowledge base database at [path], forcing an actual integrity
-/// check so a corrupt on-disk file — e.g. one left over from a download bug,
-/// or corrupted by anything else — surfaces here, inside `main()` before
-/// `runApp()`, instead of crashing later deep inside the widget tree. If
-/// opening or checking throws, the bad file is deleted and we retry once,
-/// which then opens (or creates) a fresh, empty database instead. A bad
-/// knowledge base file should never be able to brick app startup.
-Future<KnowledgeBaseDatabase> _openKnowledgeBaseDatabaseSafely(String path) async {
-  KnowledgeBaseDatabase? db;
-  try {
-    db = KnowledgeBaseDatabase.fromFile(path);
-    // Drift opens the underlying file lazily on first use, so force that
-    // now rather than letting a corrupt file surface unguarded later.
-    // `PRAGMA quick_check` walks the actual b-tree structure, unlike a
-    // trivial `SELECT 1` (which a file with a valid header but corrupted
-    // page data would still pass).
-    final result = await db.customSelect('PRAGMA quick_check').getSingle();
-    if (result.read<String>('quick_check') != 'ok') {
-      throw const FormatException('knowledge base failed quick_check');
-    }
-    return db;
-  } catch (_) {
-    await db?.close();
-    final badFile = File(path);
-    if (await badFile.exists()) {
-      await badFile.delete();
-    }
-    return KnowledgeBaseDatabase.fromFile(path);
-  }
 }
 
 Future<void> _scheduleBackgroundPrayerWorker() async {
