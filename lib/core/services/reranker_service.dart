@@ -36,6 +36,12 @@ class RerankerService {
       return;
     }
 
+    // `acquired` tracks whether OrtRuntime.acquire() itself succeeded, so
+    // the catch block below only calls a matching OrtRuntime.release() for
+    // a real leaked acquire — never for a failure that happened before
+    // acquire() ran (see lib/core/services/embedding_service.dart's
+    // init() for the same pattern and its rationale).
+    var acquired = false;
     try {
       // Reuses the embedding model's own vocab.txt — verified byte-
       // identical to this reranker's vocab (both are standard
@@ -46,6 +52,7 @@ class RerankerService {
       _vocabIndex = _buildVocabIndex(vocabData);
 
       OrtRuntime.acquire();
+      acquired = true;
       final bytes = await rootBundle.load('assets/models/ms_marco_minilm_l6_v2.onnx');
       final sessionOptions = OrtSessionOptions();
       _session = OrtSession.fromBuffer(bytes.buffer.asUint8List(), sessionOptions);
@@ -56,6 +63,9 @@ class RerankerService {
       // meaningful "mock score" to fall back to, so callers must skip
       // reranking entirely on this signal, not treat it as a real result.
       debugPrint('RerankerService.init failed, reranking will be skipped: $e\n$st');
+      if (acquired) {
+        OrtRuntime.release();
+      }
       _useMock = true;
       _initialized = true;
     }
@@ -131,40 +141,42 @@ class RerankerService {
       final inputIdsTensor = OrtValueTensor.createTensorWithDataList(inputIds, shape);
       final attentionMaskTensor = OrtValueTensor.createTensorWithDataList(attentionMask, shape);
       final tokenTypeIdsTensor = OrtValueTensor.createTensorWithDataList(segmentIds, shape);
-
-      final inputs = {
-        'input_ids': inputIdsTensor,
-        'attention_mask': attentionMaskTensor,
-        'token_type_ids': tokenTypeIdsTensor,
-      };
       final runOptions = OrtRunOptions();
-      final outputs = await _session!.runAsync(runOptions, inputs);
+      List<OrtValue?>? outputs;
+      try {
+        final inputs = {
+          'input_ids': inputIdsTensor,
+          'attention_mask': attentionMaskTensor,
+          'token_type_ids': tokenTypeIdsTensor,
+        };
+        outputs = await _session!.runAsync(runOptions, inputs);
 
-      // A single relevance logit per example: output shape [1, 1] (see
-      // config.json's id2label — one label, not a 2-class softmax).
-      double? logit;
-      final rawOutput = outputs != null && outputs.isNotEmpty ? outputs[0]?.value : null;
-      if (rawOutput is List && rawOutput.isNotEmpty) {
-        final batch0 = rawOutput[0];
-        if (batch0 is List && batch0.isNotEmpty) {
-          logit = (batch0[0] as num).toDouble();
+        // A single relevance logit per example: output shape [1, 1] (see
+        // config.json's id2label — one label, not a 2-class softmax).
+        double? logit;
+        final rawOutput = outputs != null && outputs.isNotEmpty ? outputs[0]?.value : null;
+        if (rawOutput is List && rawOutput.isNotEmpty) {
+          final batch0 = rawOutput[0];
+          if (batch0 is List && batch0.isNotEmpty) {
+            logit = (batch0[0] as num).toDouble();
+          }
         }
-      }
 
-      inputIdsTensor.release();
-      attentionMaskTensor.release();
-      tokenTypeIdsTensor.release();
-      if (outputs != null) {
-        for (final out in outputs) {
-          out?.release();
+        if (logit == null) {
+          debugPrint('RerankerService.score got no usable output for "$query" — treating as unavailable.');
         }
+        return logit;
+      } finally {
+        inputIdsTensor.release();
+        attentionMaskTensor.release();
+        tokenTypeIdsTensor.release();
+        if (outputs != null) {
+          for (final out in outputs) {
+            out?.release();
+          }
+        }
+        runOptions.release();
       }
-      runOptions.release();
-
-      if (logit == null) {
-        debugPrint('RerankerService.score got no usable output for "$query" — treating as unavailable.');
-      }
-      return logit;
     } catch (e, st) {
       debugPrint('RerankerService.score failed for "$query": $e\n$st');
       return null;
