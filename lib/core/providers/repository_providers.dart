@@ -6,6 +6,7 @@ import '../../data/repositories/rag_repository.dart';
 import 'database_provider.dart';
 import 'embedding_provider.dart';
 import '../services/engagement_service.dart';
+import '../services/reranker_service.dart';
 import '../services/daily_story_service.dart';
 import '../services/llm_service.dart';
 import '../services/kb_download_service.dart';
@@ -26,10 +27,17 @@ final conversationRepositoryProvider = Provider<ConversationRepository>((ref) {
   return ConversationRepository(ref.watch(appDatabaseProvider));
 });
 
+final rerankerServiceProvider = Provider<RerankerService>((ref) {
+  final service = RerankerService();
+  ref.onDispose(() => service.dispose());
+  return service;
+});
+
 final ragRepositoryProvider = Provider<RagRepository>((ref) {
   return RagRepository(
     ref.watch(knowledgeBaseDatabaseProvider),
     ref.watch(embeddingServiceProvider),
+    ref.watch(rerankerServiceProvider),
   );
 });
 
