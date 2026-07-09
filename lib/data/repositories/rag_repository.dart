@@ -66,7 +66,7 @@ RagCitation citationFor(RagSearchResult result) {
 }
 
 /// Hybrid retrieval over the offline knowledge base: fuses embedding
-/// similarity (an in-memory, SIMD-accelerated scan — see [_ensureEmbeddingCache])
+/// similarity (an in-memory, int8-quantized scan — see [_ensureEmbeddingCache])
 /// with BM25 keyword search ([Bm25Index]) via Reciprocal Rank Fusion.
 class RagRepository {
   final KnowledgeBaseDatabase _db;
@@ -88,7 +88,7 @@ class RagRepository {
     _bm25Index = Bm25Index(_db);
   }
 
-  /// Loads every stored embedding into one flat, contiguous [Float32List]
+  /// Loads every stored embedding into one flat, contiguous [Int8List]
   /// (docCount × 384) plus a parallel doc-id list, once. Replaces the old
   /// per-query `SELECT * FROM vec_knowledge_base` (the dominant cost of the
   /// previous implementation) — this cache lives for the repository's
