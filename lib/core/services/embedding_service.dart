@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:onnxruntime/onnxruntime.dart';
 import 'package:bert_tokenizer/bert_tokenizer.dart';
+import 'ort_runtime.dart';
 
 /// BGE's documented asymmetric convention: passages/corpus text embeds
 /// plain, but queries get this instruction prefix — skipping it measurably
@@ -31,7 +32,7 @@ class EmbeddingService {
       final vocabData = await rootBundle.loadString('assets/models/bge_small_en_v1_5_vocab.txt');
       _tokenizer = BertTokenizer.fromStringContent(vocabData);
 
-      OrtEnv.instance.init();
+      OrtRuntime.acquire();
       final bytes = await rootBundle.load('assets/models/bge_small_en_v1_5.onnx');
       final sessionOptions = OrtSessionOptions();
       _session = OrtSession.fromBuffer(bytes.buffer.asUint8List(), sessionOptions);
@@ -152,7 +153,7 @@ class EmbeddingService {
   void dispose() {
     _session?.release();
     if (_initialized && !_useMock) {
-      OrtEnv.instance.release();
+      OrtRuntime.release();
     }
   }
 }
