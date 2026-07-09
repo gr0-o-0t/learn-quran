@@ -119,12 +119,15 @@ void main() {
         await embeddingService.getEmbedding('A rare distinctive keyword: xenocryst appears here.'),
       );
       await db.batch((batch) {
+        batch.insertAll(db.bm25Terms, [
+          Bm25TermsCompanion.insert(termId: const drift.Value(1), term: 'xenocryst'),
+        ]);
         batch.insertAll(db.bm25Postings, [
-          Bm25PostingsCompanion.insert(term: 'xenocryst', docId: RagRepository.hadithOffset + 2, termFrequency: 1),
+          Bm25PostingsCompanion.insert(termId: 1, docId: RagRepository.hadithOffset + 2, termFrequency: 1),
         ]);
         // docId is Bm25DocStats's primary key, so Drift generates it as an
         // optional Value<int> in .insert(...) — must be wrapped, unlike the
-        // plain-int docId on Bm25Postings above (no primary key there).
+        // plain-int termId/docId on Bm25Postings above (no primary key there).
         batch.insertAll(db.bm25DocStats, [
           Bm25DocStatsCompanion.insert(docId: const drift.Value(RagRepository.hadithOffset + 2), docLength: 6),
         ]);

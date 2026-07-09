@@ -63,8 +63,16 @@ class TafsirChunks extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-class Bm25Postings extends Table {
+class Bm25Terms extends Table {
+  IntColumn get termId => integer()();
   TextColumn get term => text()();
+
+  @override
+  Set<Column> get primaryKey => {termId};
+}
+
+class Bm25Postings extends Table {
+  IntColumn get termId => integer()();
   IntColumn get docId => integer()();
   IntColumn get termFrequency => integer()();
 }
@@ -77,7 +85,7 @@ class Bm25DocStats extends Table {
   Set<Column> get primaryKey => {docId};
 }
 
-@DriftDatabase(tables: [Verses, Hadiths, Tafsirs, KbMeta, TafsirChunks, Bm25Postings, Bm25DocStats])
+@DriftDatabase(tables: [Verses, Hadiths, Tafsirs, KbMeta, TafsirChunks, Bm25Terms, Bm25Postings, Bm25DocStats])
 class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
   KnowledgeBaseDatabase.forTesting(super.executor);
 
@@ -87,18 +95,18 @@ class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
   KnowledgeBaseDatabase.fromFile(String path) : super(NativeDatabase.createInBackground(File(path)));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
           await _createVectorTable();
-          await _createBm25TermIndex();
+          await _createBm25Indexes();
         },
         beforeOpen: (details) async {
           await _createVectorTable();
-          await _createBm25TermIndex();
+          await _createBm25Indexes();
         },
       );
 
@@ -115,9 +123,16 @@ class KnowledgeBaseDatabase extends _$KnowledgeBaseDatabase {
     ''');
   }
 
-  Future<void> _createBm25TermIndex() async {
+  Future<void> _createBm25Indexes() async {
+    // idx_bm25_terms_term: resolves a query token's string to its termId
+    // (Bm25Index.search's first lookup per token). idx_bm25_postings_term_id:
+    // the equivalent of the old idx_bm25_postings_term index, now over the
+    // termId column postings are actually queried by.
     await customStatement(
-      'CREATE INDEX IF NOT EXISTS idx_bm25_postings_term ON bm25_postings (term);',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_bm25_terms_term ON bm25_terms (term);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_bm25_postings_term_id ON bm25_postings (term_id);',
     );
   }
 }

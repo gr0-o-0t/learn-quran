@@ -34,7 +34,9 @@ class Bm25Index {
 
       final scores = <int, double>{};
       for (final term in terms) {
-        final postings = await (_db.select(_db.bm25Postings)..where((t) => t.term.equals(term))).get();
+        final termRow = await (_db.select(_db.bm25Terms)..where((t) => t.term.equals(term))).getSingleOrNull();
+        if (termRow == null) continue; // term not in the dictionary — no matches for it
+        final postings = await (_db.select(_db.bm25Postings)..where((t) => t.termId.equals(termRow.termId))).get();
         if (postings.isEmpty) continue;
 
         final df = postings.length;

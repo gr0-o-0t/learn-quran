@@ -22,11 +22,16 @@ void main() {
     // const Value(...), not passed as a bare int (Bm25Postings has no
     // primary key column, so its docId stays a plain int there).
     await db.batch((batch) {
+      batch.insertAll(db.bm25Terms, [
+        Bm25TermsCompanion.insert(termId: const Value(1), term: 'patience'),
+        Bm25TermsCompanion.insert(termId: const Value(2), term: 'prophet'),
+        Bm25TermsCompanion.insert(termId: const Value(3), term: 'prayer'),
+      ]);
       batch.insertAll(db.bm25Postings, [
-        Bm25PostingsCompanion.insert(term: 'patience', docId: 1, termFrequency: 2),
-        Bm25PostingsCompanion.insert(term: 'prophet', docId: 1, termFrequency: 1),
-        Bm25PostingsCompanion.insert(term: 'prophet', docId: 2, termFrequency: 3),
-        Bm25PostingsCompanion.insert(term: 'prayer', docId: 3, termFrequency: 3),
+        Bm25PostingsCompanion.insert(termId: 1, docId: 1, termFrequency: 2),
+        Bm25PostingsCompanion.insert(termId: 2, docId: 1, termFrequency: 1),
+        Bm25PostingsCompanion.insert(termId: 2, docId: 2, termFrequency: 3),
+        Bm25PostingsCompanion.insert(termId: 3, docId: 3, termFrequency: 3),
       ]);
       batch.insertAll(db.bm25DocStats, [
         Bm25DocStatsCompanion.insert(docId: const Value(1), docLength: 3),
@@ -76,6 +81,7 @@ void main() {
       // tables are gone.
       await db.customStatement('DROP TABLE bm25_postings');
       await db.customStatement('DROP TABLE bm25_doc_stats');
+      await db.customStatement('DROP TABLE bm25_terms');
 
       final results = await index.search('patience');
       expect(results, isEmpty);

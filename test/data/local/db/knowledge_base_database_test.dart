@@ -77,10 +77,13 @@ void main() {
     final chunk = await (db.select(db.tafsirChunks)..where((t) => t.id.equals(1))).getSingle();
     expect(chunk.contentEnglish, 'First chunk of commentary.');
 
-    await db.into(db.bm25Postings).insert(
-          Bm25PostingsCompanion.insert(term: 'patience', docId: 1, termFrequency: 2),
+    await db.into(db.bm25Terms).insert(
+          Bm25TermsCompanion.insert(termId: const Value(1), term: 'patience'),
         );
-    final posting = await (db.select(db.bm25Postings)..where((t) => t.term.equals('patience'))).getSingle();
+    await db.into(db.bm25Postings).insert(
+          Bm25PostingsCompanion.insert(termId: 1, docId: 1, termFrequency: 2),
+        );
+    final posting = await (db.select(db.bm25Postings)..where((t) => t.termId.equals(1))).getSingle();
     expect(posting.docId, 1);
     expect(posting.termFrequency, 2);
 

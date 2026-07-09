@@ -229,21 +229,37 @@ Future<void> _embedAndIndex(KnowledgeBaseDatabase db, EmbeddingService embedding
   }
 
   stdout.writeln('Building BM25 index (${termFrequenciesByDoc.length} documents)...');
+  final termIds = <String, int>{};
+  int termIdFor(String term) => termIds.putIfAbsent(term, () => termIds.length + 1);
+
   await db.batch((batch) {
     for (final entry in termFrequenciesByDoc.entries) {
       final docId = entry.key;
       for (final termEntry in entry.value.entries) {
+        final termId = termIdFor(termEntry.key);
         batch.insert(
           db.bm25Postings,
-          Bm25PostingsCompanion.insert(term: termEntry.key, docId: docId, termFrequency: termEntry.value),
+          Bm25PostingsCompanion.insert(termId: termId, docId: docId, termFrequency: termEntry.value),
         );
       }
       // docId is Bm25DocStats's primary key, so Drift generates it as an
       // optional Value<int> in .insert(...) — must be wrapped, unlike the
-      // plain-int docId on Bm25Postings above (no primary key there).
+      // plain-int termId/docId on Bm25Postings above (no primary key there).
       batch.insert(
         db.bm25DocStats,
         Bm25DocStatsCompanion.insert(docId: Value(docId), docLength: docLengths[docId]!),
+      );
+    }
+  });
+
+  stdout.writeln('  BM25 term dictionary: ${termIds.length} unique terms');
+  await db.batch((batch) {
+    for (final entry in termIds.entries) {
+      // termId is Bm25Terms's primary key, so Drift generates it as an
+      // optional Value<int> in .insert(...) — must be wrapped.
+      batch.insert(
+        db.bm25Terms,
+        Bm25TermsCompanion.insert(termId: Value(entry.value), term: entry.key),
       );
     }
   });
