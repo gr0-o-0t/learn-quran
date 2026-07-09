@@ -126,7 +126,7 @@ void main() {
       await kbDb.close();
     });
 
-    test('with no chat override (no model downloaded), retrieves on the raw question and streams the mock response', () async {
+    test('retrieves on the raw question and streams the mock response when no model is downloaded', () async {
       final llm = LlmService(userRepo, downloadService);
       final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
 
@@ -140,11 +140,10 @@ void main() {
       expect(response, contains('As-Salamu Alaykum'));
     });
 
-    test('with a chat override, retrieval uses the drafted text (HyDE), not the raw question', () async {
-      final calls = <int>[];
+    test('makes exactly one LLM call, for the refine pass, always on the original question', () async {
+      final calls = <String>[];
       Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
-        calls.add(maxTokens);
-        if (maxTokens == 150) return Stream.value('a hypothetical draft answer');
+        calls.add(userPrompt);
         return Stream.value('Final grounded answer.');
       }
       final llm = LlmService(userRepo, downloadService, chatOverride);
@@ -156,51 +155,13 @@ void main() {
       );
       final response = await stream.join();
 
-      expect(calls, [150, 512]);
-      expect(recordingRepo.queries, ['a hypothetical draft answer']);
-      expect(response, 'Final grounded answer.');
-    });
-
-    test('falls back to the raw question for retrieval if the draft pass throws', () async {
-      Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
-        if (maxTokens == 150) throw Exception('simulated draft failure');
-        return Stream.value('Final grounded answer.');
-      }
-      final llm = LlmService(userRepo, downloadService, chatOverride);
-      final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
-
-      final stream = llm.generateGroundedResponseStream(
-        'the original question',
-        ragRepository: recordingRepo,
-      );
-      final response = await stream.join();
-
+      expect(calls, ['the original question']);
       expect(recordingRepo.queries, ['the original question']);
       expect(response, 'Final grounded answer.');
     });
 
-    test('the refine pass always answers the original question, never the draft', () async {
-      final capturedUserPrompts = <String>[];
-      Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
-        capturedUserPrompts.add(userPrompt);
-        if (maxTokens == 150) return Stream.value('a hypothetical draft answer');
-        return Stream.value('Final grounded answer.');
-      }
-      final llm = LlmService(userRepo, downloadService, chatOverride);
-      final recordingRepo = _RecordingRagRepository(kbDb, embeddingService);
-
-      final stream = llm.generateGroundedResponseStream(
-        'the original question',
-        ragRepository: recordingRepo,
-      );
-      await stream.join();
-
-      expect(capturedUserPrompts, ['the original question', 'the original question']);
-    });
-
     test('onRetrieved fires with the results generateGroundedResponseStream retrieved', () async {
       Future<Stream<String>?> chatOverride(String systemPrompt, String userPrompt, int maxTokens) async {
-        if (maxTokens == 150) return Stream.value('draft');
         return Stream.value('answer');
       }
       final llm = LlmService(userRepo, downloadService, chatOverride);

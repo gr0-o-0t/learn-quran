@@ -160,42 +160,25 @@ class LlmService {
     yield* chatStream;
   }
 
-  static const _draftSystemPrompt =
-      'You are a gentle, respectful Islamic teaching companion. Answer the '
-      'question briefly and naturally from your own general knowledge — you '
-      'do not need to cite sources or worry about accuracy for this answer.';
-
-  /// Two-pass, RAG-grounded generation for the Q&A screen:
-  /// 1. A short, hidden draft answer from the model's own knowledge (HyDE —
-  ///    a hypothetical answer retrieves better than the raw question).
-  /// 2. Hybrid retrieval ([ragRepository.search]) using that draft as the
-  ///    query.
-  /// 3. The same single-pass [generateResponseStream] as the final "refine"
-  ///    pass, grounded in the retrieved references and answering the
-  ///    original [question] — never the draft.
+  /// RAG-grounded generation for the Q&A screen: hybrid retrieval
+  /// ([ragRepository.search]) on the raw [question], then a single-pass
+  /// [generateResponseStream] grounded in the retrieved references.
   ///
-  /// Degrades gracefully: if no model is available, [_chat] returns null for
-  /// the draft, so retrieval runs on the raw [question] and
-  /// [generateResponseStream] falls through to its own existing mock path —
-  /// no special-casing needed here. If the draft pass throws for any other
-  /// reason, retrieval also falls back to the raw [question].
+  /// This used to run a hidden "draft" LLM pass first (HyDE-style query
+  /// rewriting: draft a hypothetical answer, retrieve using that instead of
+  /// the raw question) — removed. It cost a full extra LLM generation per
+  /// question (measurably too slow on low-RAM phones), and a bad or
+  /// hallucinated draft could misdirect retrieval — a plausible cause of
+  /// reported "wrong citation" cases, since the draft was never grounded in
+  /// anything. RagRepository's hybrid embedding+BM25+reranking search
+  /// (see rag_repository.dart) is now relied on directly to handle the raw
+  /// question well.
   Stream<String> generateGroundedResponseStream(
     String question, {
     required RagRepository ragRepository,
     void Function(List<RagSearchResult> ragResults)? onRetrieved,
   }) async* {
-    var retrievalQuery = question;
-    try {
-      final draftStream = await _chat(_draftSystemPrompt, question, 150);
-      if (draftStream != null) {
-        final draft = (await draftStream.join()).trim();
-        if (draft.isNotEmpty) retrievalQuery = draft;
-      }
-    } catch (_) {
-      // Fall back to the raw question as the retrieval query.
-    }
-
-    final ragResults = await ragRepository.search(retrievalQuery, limit: 5);
+    final ragResults = await ragRepository.search(question, limit: 5);
     onRetrieved?.call(ragResults);
     final ragContext = _buildRagContext(ragResults);
 
