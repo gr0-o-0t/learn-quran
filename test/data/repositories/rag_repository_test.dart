@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
 import 'package:drift/drift.dart' as drift;
@@ -6,13 +5,14 @@ import 'package:learn_quran/data/local/db/knowledge_base_database.dart';
 import 'package:learn_quran/data/repositories/rag_repository.dart';
 import 'package:learn_quran/core/services/embedding_service.dart';
 import 'package:learn_quran/core/services/reranker_service.dart';
+import 'package:learn_quran/core/utils/embedding_quantization.dart';
 
 /// Mirrors what the offline `tool/build_kb.dart` writes into
 /// `vec_knowledge_base` at build time — embeddings are never generated
 /// on-device anymore (see RagRepository.search).
 Future<void> _insertVector(KnowledgeBaseDatabase db, int rowid, List<double> embedding) async {
-  final float32list = Float32List.fromList(embedding);
-  final blob = float32list.buffer.asUint8List();
+  final int8Vector = quantizeVector(embedding);
+  final blob = int8Vector.buffer.asUint8List();
   await db.customStatement(
     'INSERT OR REPLACE INTO vec_knowledge_base(rowid, embedding) VALUES (?, ?)',
     [rowid, blob],

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:args/args.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:http/http.dart' as http;
@@ -9,6 +8,7 @@ import 'package:learn_quran/core/services/embedding_service.dart';
 import 'kb_sources.dart' as kbsrc;
 import 'package:learn_quran/core/utils/text_chunking.dart';
 import 'package:learn_quran/core/utils/bm25_tokenizer.dart';
+import 'package:learn_quran/core/utils/embedding_quantization.dart';
 
 Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
@@ -276,8 +276,8 @@ Future<void> _embedAndIndex(KnowledgeBaseDatabase db, EmbeddingService embedding
 }
 
 Future<void> _insertVector(KnowledgeBaseDatabase db, int rowid, List<double> embedding) async {
-  final float32list = Float32List.fromList(embedding);
-  final blob = float32list.buffer.asUint8List();
+  final int8Vector = quantizeVector(embedding);
+  final blob = int8Vector.buffer.asUint8List();
   await db.customStatement(
     'INSERT OR REPLACE INTO vec_knowledge_base(rowid, embedding) VALUES (?, ?)',
     [rowid, blob],

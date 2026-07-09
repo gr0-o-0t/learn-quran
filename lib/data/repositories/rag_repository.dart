@@ -5,6 +5,7 @@ import '../../core/services/embedding_service.dart';
 import '../../core/services/bm25_index.dart';
 import '../../core/services/reranker_service.dart';
 import '../../core/theme/quran_data.dart';
+import '../../core/utils/embedding_quantization.dart';
 
 enum RagSourceType { verse, hadith, tafsir }
 
@@ -79,7 +80,7 @@ class RagRepository {
   static const int _rrfK = 60;
   static const int _rerankCandidateCount = 20;
 
-  Float32List? _embeddingMatrix;
+  Int8List? _embeddingMatrix;
   List<int>? _embeddingDocIds;
 
   RagRepository(this._db, this._embeddingService, [RerankerService? rerankerService])
@@ -98,17 +99,17 @@ class RagRepository {
 
     final rows = await _db.customSelect('SELECT rowid, embedding FROM vec_knowledge_base').get();
     final docIds = <int>[];
-    final matrix = Float32List(rows.length * _embeddingDimensions);
+    final matrix = Int8List(rows.length * _embeddingDimensions);
 
     for (var i = 0; i < rows.length; i++) {
       final rowid = rows[i].read<int>('rowid');
       final blob = rows[i].read<Uint8List>('embedding');
-      final floats = Float32List.sublistView(blob);
+      final int8s = Int8List.sublistView(blob);
       docIds.add(rowid);
       final offset = i * _embeddingDimensions;
-      final count = min(_embeddingDimensions, floats.length);
+      final count = min(_embeddingDimensions, int8s.length);
       for (var d = 0; d < count; d++) {
-        matrix[offset + d] = floats[d];
+        matrix[offset + d] = int8s[d];
       }
     }
 
@@ -116,23 +117,20 @@ class RagRepository {
     _embeddingMatrix = matrix;
   }
 
-  /// SIMD dot product (4 floats/lane) between [queryLanes] and the doc
-  /// embedding stored at [docIndex] in [matrix]. 384 divides evenly into 96
-  /// lanes, so there's no remainder to handle separately.
-  double _dotProduct(Float32x4List queryLanes, Float32List matrix, int docIndex) {
+  /// Integer dot product between [query] and the doc embedding stored at
+  /// [docIndex] in [matrix]. Both are int8-quantized (see
+  /// core/utils/embedding_quantization.dart) — Dart's `dart:typed_data` has
+  /// no int8 SIMD type, so this is a plain scalar loop; at this corpus size
+  /// (tens of thousands of docs) that's expected to still be fast enough on
+  /// a phone CPU (see the design doc's A1/A3 assumptions) without needing
+  /// the Float32x4 SIMD the old float32 version used.
+  int _dotProductInt8(Int8List query, Int8List matrix, int docIndex) {
     final base = docIndex * _embeddingDimensions;
-    var sum = Float32x4.zero();
-    for (var lane = 0; lane < queryLanes.length; lane++) {
-      final matrixOffset = base + lane * 4;
-      final docLane = Float32x4(
-        matrix[matrixOffset],
-        matrix[matrixOffset + 1],
-        matrix[matrixOffset + 2],
-        matrix[matrixOffset + 3],
-      );
-      sum += queryLanes[lane] * docLane;
+    var sum = 0;
+    for (var d = 0; d < _embeddingDimensions; d++) {
+      sum += query[d] * matrix[base + d];
     }
-    return sum.x + sum.y + sum.z + sum.w;
+    return sum;
   }
 
   Future<List<MapEntry<int, double>>> _embeddingSearch(String query, {int limit = 20}) async {
@@ -142,22 +140,11 @@ class RagRepository {
     if (docIds.isEmpty) return const [];
 
     final queryVector = await _embeddingService.getEmbedding(query, isQuery: true);
-    final queryFloats = Float32List.fromList(queryVector);
-    const laneCount = _embeddingDimensions ~/ 4;
-    final queryLanes = Float32x4List(laneCount);
-    for (var lane = 0; lane < laneCount; lane++) {
-      final offset = lane * 4;
-      queryLanes[lane] = Float32x4(
-        queryFloats[offset],
-        queryFloats[offset + 1],
-        queryFloats[offset + 2],
-        queryFloats[offset + 3],
-      );
-    }
+    final queryInt8 = quantizeVector(queryVector);
 
     final scored = <MapEntry<int, double>>[];
     for (var i = 0; i < docIds.length; i++) {
-      scored.add(MapEntry(docIds[i], _dotProduct(queryLanes, matrix, i)));
+      scored.add(MapEntry(docIds[i], _dotProductInt8(queryInt8, matrix, i).toDouble()));
     }
     scored.sort((a, b) => b.value.compareTo(a.value));
     return scored.take(limit).toList();
