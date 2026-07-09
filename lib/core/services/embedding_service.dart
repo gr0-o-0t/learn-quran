@@ -28,11 +28,13 @@ class EmbeddingService {
       return;
     }
 
+    var acquired = false;
     try {
       final vocabData = await rootBundle.loadString('assets/models/bge_small_en_v1_5_vocab.txt');
       _tokenizer = BertTokenizer.fromStringContent(vocabData);
 
       OrtRuntime.acquire();
+      acquired = true;
       final bytes = await rootBundle.load('assets/models/bge_small_en_v1_5.onnx');
       final sessionOptions = OrtSessionOptions();
       _session = OrtSession.fromBuffer(bytes.buffer.asUint8List(), sessionOptions);
@@ -44,6 +46,13 @@ class EmbeddingService {
       // loud: every RAG search would look "successful" (valid citations)
       // while actually retrieving semantically unrelated content.
       debugPrint('EmbeddingService.init failed, falling back to mock embeddings: $e\n$st');
+      if (acquired) {
+        // OrtRuntime.acquire() succeeded but something after it (loading
+        // the model bytes, creating the session) threw — release the
+        // matching acquire now, since dispose()'s `!_useMock` guard will
+        // never call release() for an instance that fell back to mock.
+        OrtRuntime.release();
+      }
       _useMock = true;
       _initialized = true;
     }
