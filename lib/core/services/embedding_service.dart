@@ -28,6 +28,21 @@ class EmbeddingService {
       return;
     }
 
+    // `acquired` tracks whether OrtRuntime.acquire() itself succeeded, so
+    // the catch block below only calls a matching OrtRuntime.release() for
+    // a real leaked acquire — never for a failure that happened before
+    // acquire() ran (which would wrongly decrement another consumer's ref
+    // count instead of its own). This exact branch (acquire succeeds, a
+    // later step like model-byte loading or session creation fails) isn't
+    // independently unit-tested: reaching it needs a real onnxruntime
+    // native library loaded (only available via a special LD_LIBRARY_PATH
+    // harness elsewhere in this codebase, see tool/build_kb_runner.dart)
+    // plus a way to fail strictly at session creation, which would need a
+    // new injectable test seam disproportionate to this one edge case.
+    // OrtRuntime's own ref-counting semantics are directly and thoroughly
+    // unit-tested in test/core/services/ort_runtime_test.dart; the
+    // pairing here (acquire only flips `acquired`, catch only releases if
+    // `acquired`) has been verified correct by manual code review.
     var acquired = false;
     try {
       final vocabData = await rootBundle.loadString('assets/models/bge_small_en_v1_5_vocab.txt');
