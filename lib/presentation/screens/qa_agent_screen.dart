@@ -450,10 +450,10 @@ class _QaAgentScreenState extends ConsumerState<QaAgentScreen> {
     _scrollToBottom();
 
     try {
-      // 2. Generate a grounded response: the LLM drafts from its own
-      // knowledge first, that draft becomes the retrieval query (HyDE),
-      // then the LLM refines its answer using the real retrieved
-      // references — see LlmService.generateGroundedResponseStream.
+      // 2. Generate a grounded response: hybrid retrieval (embedding +
+      // BM25 + reranking) runs directly on the raw question, then the LLM
+      // answers grounded in the real retrieved references — see
+      // LlmService.generateGroundedResponseStream.
       List<Map<String, String>> citationsList = [];
       String citationsStr = '';
 
