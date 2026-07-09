@@ -35,19 +35,33 @@ class ModelInfo {
 }
 
 /// The fixed, curated set of models users can download. Sizes verified
-/// against the real Hugging Face files as of 2026-07-05 (Q4_K_M
-/// quantizations from unsloth's Gemma 4 GGUF mirrors — Google's own
-/// official repos are gated behind Hugging Face auth + license
-/// acceptance, which isn't feasible for an anonymous in-app download).
+/// against the real Hugging Face files (Q4_K_M quantizations from
+/// unsloth's Gemma 4 GGUF mirrors for e2b/e4b, as of 2026-07-05; Qwen's own
+/// official GGUF repo for the tiny tier, as of 2026-07-09 — Google's own
+/// Gemma repos are gated behind Hugging Face auth + license acceptance,
+/// which isn't feasible for an anonymous in-app download; Qwen's
+/// Apache-2.0 official repo has no such gating). Ordered lightest-first —
+/// [recommendedModelFor] relies on the first entry being the correct
+/// fallback for devices below every other entry's threshold.
 const List<ModelInfo> kModelCatalog = [
+  ModelInfo(
+    id: 'tiny',
+    displayName: 'Qwen 2.5 0.5B (Tiniest)',
+    description: 'For very low-RAM devices (<4GB) — shorter, simpler answers',
+    huggingFaceRepo: 'Qwen/Qwen2.5-0.5B-Instruct-GGUF',
+    filename: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
+    revision: '9217f5db79a29953eb74d5343926648285ec7e67',
+    sizeBytes: 491400032,
+  ),
   ModelInfo(
     id: 'e2b',
     displayName: 'Gemma 4 E2B (Lighter)',
-    description: 'Recommended for devices with <6GB RAM',
+    description: 'Recommended for devices with 4-6GB RAM',
     huggingFaceRepo: 'unsloth/gemma-4-E2B-it-GGUF',
     filename: 'gemma-4-E2B-it-Q4_K_M.gguf',
     revision: 'ecc8b33b2c50598815e4b0f7cea6088e3ae7adb8',
     sizeBytes: 3106736256,
+    recommendedAboveRamGb: 4.0,
   ),
   ModelInfo(
     id: 'e4b',

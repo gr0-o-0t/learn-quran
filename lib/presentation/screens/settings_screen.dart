@@ -21,7 +21,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen>
     with WidgetsBindingObserver {
   String _selectedLanguage = 'English';
-  String _selectedModel = 'e2b';
+  String _selectedModel = kModelCatalog.first.id;
   String _calculationMethod = 'muslim_world_league';
   bool _salatNotifications = true;
   bool _notificationsEnabled = false;
@@ -340,8 +340,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _loadSettings() async {
     final userRepo = ref.read(userRepositoryProvider);
+    final defaultModelId = recommendedModelFor(ref.read(llmServiceProvider).detectDeviceRamGb()).id;
     final lang = await userRepo.getEngagementValue('selected_language') ?? 'English';
-    final model = await userRepo.getEngagementValue('selected_llm_model') ?? 'e2b';
+    final model = await userRepo.getEngagementValue('selected_llm_model') ?? defaultModelId;
     final method = await userRepo.getEngagementValue('calculation_method') ?? 'muslim_world_league';
     final notifs = await userRepo.getEngagementValue('salat_notifications') ?? 'true';
     final wifiOnly = await userRepo.getEngagementValue('wifi_only_model_downloads') ?? 'true';
