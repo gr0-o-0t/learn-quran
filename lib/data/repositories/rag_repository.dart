@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../local/db/knowledge_base_database.dart';
 import '../../core/services/embedding_service.dart';
 import '../../core/services/bm25_index.dart';
+import '../../core/services/reranker_service.dart';
 import '../../core/theme/quran_data.dart';
 
 enum RagSourceType { verse, hadith, tafsir }
@@ -69,17 +70,20 @@ RagCitation citationFor(RagSearchResult result) {
 class RagRepository {
   final KnowledgeBaseDatabase _db;
   final EmbeddingService _embeddingService;
+  final RerankerService _rerankerService;
   late final Bm25Index _bm25Index;
 
   static const int hadithOffset = 100000;
   static const int tafsirOffset = 200000;
   static const int _embeddingDimensions = 384;
   static const int _rrfK = 60;
+  static const int _rerankCandidateCount = 20;
 
   Float32List? _embeddingMatrix;
   List<int>? _embeddingDocIds;
 
-  RagRepository(this._db, this._embeddingService) {
+  RagRepository(this._db, this._embeddingService, [RerankerService? rerankerService])
+      : _rerankerService = rerankerService ?? RerankerService() {
     _bm25Index = Bm25Index(_db);
   }
 
@@ -187,16 +191,37 @@ class RagRepository {
   Future<List<RagSearchResult>> search(String query, {int limit = 5}) async {
     final embeddingResults = await _embeddingSearch(query, limit: 20);
     final bm25Results = await _bm25Index.search(query, limit: 20);
-    final fused = _reciprocalRankFusion(embeddingResults, bm25Results, limit: limit);
+    final fused = _reciprocalRankFusion(embeddingResults, bm25Results, limit: _rerankCandidateCount);
 
-    final searchResults = <RagSearchResult>[];
+    final candidates = <RagSearchResult>[];
     for (final entry in fused) {
       final match = await _buildSearchResult(entry.key, entry.value);
       if (match.verse != null || match.hadith != null || match.tafsir != null) {
-        searchResults.add(match);
+        candidates.add(match);
       }
     }
-    return searchResults;
+
+    final reranked = await _rerank(query, candidates);
+    return reranked.take(limit).toList();
+  }
+
+  /// Reranks [candidates] by relevance to [query] using [_rerankerService],
+  /// highest score first. If the reranker is unavailable or any single
+  /// scoring call fails, bails out to the original (RRF-fused) order for
+  /// every candidate — reranking either fully succeeds or is fully skipped,
+  /// never partially applied.
+  Future<List<RagSearchResult>> _rerank(String query, List<RagSearchResult> candidates) async {
+    if (candidates.isEmpty) return candidates;
+
+    final scored = <MapEntry<RagSearchResult, double>>[];
+    for (final candidate in candidates) {
+      final text = citationFor(candidate).text;
+      final score = await _rerankerService.score(query, text);
+      if (score == null) return candidates;
+      scored.add(MapEntry(candidate, score));
+    }
+    scored.sort((a, b) => b.value.compareTo(a.value));
+    return scored.map((e) => e.key).toList();
   }
 
   Future<RagSearchResult> _buildSearchResult(int rowid, double score) async {

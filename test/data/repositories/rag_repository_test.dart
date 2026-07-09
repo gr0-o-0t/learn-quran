@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:learn_quran/data/local/db/knowledge_base_database.dart';
 import 'package:learn_quran/data/repositories/rag_repository.dart';
 import 'package:learn_quran/core/services/embedding_service.dart';
+import 'package:learn_quran/core/services/reranker_service.dart';
 
 /// Mirrors what the offline `tool/build_kb.dart` writes into
 /// `vec_knowledge_base` at build time — embeddings are never generated
@@ -196,6 +197,48 @@ void main() {
       final citation = citationFor(result);
       expect(citation.title, 'Tafsir Al-Fatiha 1:1');
       expect(citation.text, 'Commentary on the Basmalah.');
+    });
+  });
+
+  group('RagRepository reranking', () {
+    test('reranker reorders the fused RRF candidates by its own relevance score', () async {
+      // hadith 2 has no special embedding/BM25 relationship to the query
+      // below (its mock embedding is unrelated, and it has no BM25
+      // postings) — only the reranker override declaring it maximally
+      // relevant should be able to put it first.
+      await db.into(db.hadiths).insert(HadithsCompanion.insert(
+            id: const drift.Value(2),
+            bookName: 'Sahih Muslim',
+            hadithNumber: '99',
+            chapterTitle: 'Zakat',
+            arabicText: 'زَكَاة',
+            englishText: 'A distinctive passage the reranker will prefer.',
+            banglaText: 'যাকাত',
+          ));
+      await _insertVector(
+        db,
+        RagRepository.hadithOffset + 2,
+        await embeddingService.getEmbedding('A distinctive passage the reranker will prefer.'),
+      );
+
+      final reranker = RerankerService(
+        scoreOverride: (query, passage) async => passage.contains('reranker will prefer') ? 100.0 : 0.0,
+      );
+      final repoWithReranker = RagRepository(db, embeddingService, reranker);
+
+      final results = await repoWithReranker.search('name of Allah', limit: 1);
+
+      expect(results, hasLength(1));
+      expect(results.first.hadith?.id, 2);
+    });
+
+    test('falls back to RRF order (not an error) when the reranker is unavailable', () async {
+      final reranker = RerankerService(forceMock: true);
+      final repoWithReranker = RagRepository(db, embeddingService, reranker);
+
+      final results = await repoWithReranker.search('name of Allah', limit: 2);
+
+      expect(results, isNotEmpty);
     });
   });
 }
