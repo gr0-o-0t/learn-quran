@@ -17,16 +17,17 @@ class KbInfo {
 }
 
 /// The current knowledge base version the app knows how to fetch.
-/// Verified against the real kb-v1.1.0 GitHub Release (2026-07-06):
-/// size 536846336 bytes, sha256 8d189e81b8cf87840f6d538b0e5f75ba9a069b19924a89e66fc35b72c8f54b36.
-/// v1.1.0 is the first release built with real BGE embeddings (all prior
-/// releases, including v1.0.1, shipped with random mock embeddings due to
-/// a build-harness bug — see tool/build_kb_runner.dart), and adds chunked
-/// tafsir plus a precomputed BM25 index for hybrid retrieval
-/// (see lib/data/repositories/rag_repository.dart).
+/// Verified against the real kb-v1.2.0 GitHub Release (2026-07-10):
+/// size 384888832 bytes, sha256 8b3522797c832e661e74688d37116d91bb9bee0f67f8aabf48d34a21842cd02d.
+/// v1.2.0 int8-quantizes the embedding vectors (4x smaller than v1.1.0's
+/// float32 storage) and dictionary-encodes BM25 postings (a new
+/// Bm25Terms table, replacing per-posting term strings with integer
+/// termIds) — together shrinking the file by ~28% vs v1.1.0's 536846336
+/// bytes, as part of a mobile RAG optimization round (see
+/// lib/data/repositories/rag_repository.dart, lib/core/utils/embedding_quantization.dart).
 const KbInfo kCurrentKb = KbInfo(
-  version: '1.1.0',
+  version: '1.2.0',
   filename: 'kb.db',
-  sizeBytes: 536846336,
-  sha256: '8d189e81b8cf87840f6d538b0e5f75ba9a069b19924a89e66fc35b72c8f54b36',
+  sizeBytes: 384888832,
+  sha256: '8b3522797c832e661e74688d37116d91bb9bee0f67f8aabf48d34a21842cd02d',
 );
